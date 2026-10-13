@@ -1,4 +1,3 @@
-import 'material-symbols/sharp.css';
 import { registerRevealLayer } from '@ax-design/reveal-highlight';
 import { register } from '@ax-design/tile-group';
 import type { AxTileGroup } from '@ax-design/tile-group';

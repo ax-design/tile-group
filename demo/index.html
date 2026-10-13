@@ -18,17 +18,14 @@
   .start h2 { font-size: 20px; font-weight: 300; margin: 0 0 14px; }
 
   ax-tile-group { --tile-cell-width: 70px; --tile-cell-height: 70px; --tile-gap: 10px; --tile-rows: 6; }
-  /* Border width and the pressed tilt are the defaults of ax-tile; only the colors are set here. */
-  ax-tile { color: #fff; cursor: default; --reveal-color: rgb(255, 255, 255); --reveal-opacity: 0.25; }
-  /* Windows 8.1 tiles: a large glyph in the middle, the name at the bottom left. */
-  ax-tile .icon {
-    position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center;
-    font-family: "Material Symbols Sharp"; font-weight: normal; font-style: normal; line-height: 1;
-    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 48; -webkit-font-smoothing: antialiased;
-    font-size: 56px;
-  }
-  ax-tile[rows="1"] .icon { font-size: 34px; font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 40; }
-  ax-tile[rows="4"] .icon { font-size: 96px; }
+  /* Border width and the pressed tilt are the defaults of ax-tile; only the colors are set here.
+     Neutral, see-through tiles like the transparent tiles of Windows 10, so the color icons
+     (Fluent UI System Icons, the color set of Windows 11) carry the color. */
+  ax-tile { color: #fff; cursor: default; --ax-fill-color: rgba(255, 255, 255, 0.09); --reveal-color: rgb(255, 255, 255); --reveal-opacity: 0.25; }
+  /* Windows 8.1 tiles: a large icon in the middle, the name at the bottom left. */
+  ax-tile .icon { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; transform: translate(-50%, -50%); pointer-events: none; }
+  ax-tile[rows="1"] .icon { width: 34px; height: 34px; }
+  ax-tile[rows="4"] .icon { width: 96px; height: 96px; }
   ax-tile .label { position: absolute; left: 8px; bottom: 6px; font-size: 13px; }
   ax-tile[rows="1"] .label { display: none; }
 
@@ -56,19 +53,19 @@
 <section class="start">
   <h2>Everyday</h2>
   <ax-tile-group id="group" drag="press" contextmenu>
-    <ax-tile columns="4" rows="2" layers="fill reveal" style="--ax-fill-color: #2d7d9a"><span class="icon" aria-hidden="true">mail</span><div class="label">Mail</div></ax-tile>
-    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #6a4c9c"><span class="icon" aria-hidden="true">calendar_month</span><div class="label">Calendar</div></ax-tile>
-    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #3a7a55"><span class="icon" aria-hidden="true">schedule</span><div class="label">Clock</div></ax-tile>
-    <ax-tile columns="4" rows="4" layers="fill reveal" style="--ax-fill-color: #8a5a3c"><span class="icon" aria-hidden="true">photo_library</span><div class="label">Photos</div></ax-tile>
-    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #4b5d8f"><span class="icon" aria-hidden="true">settings</span><div class="label">Settings</div></ax-tile>
-    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #7a4566"><span class="icon" aria-hidden="true">music_note</span><div class="label">Music</div></ax-tile>
-    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #3f7f86"><span class="icon" aria-hidden="true">cloud</span><div class="label">OneDrive</div></ax-tile>
-    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #6b6a3a"><span class="icon" aria-hidden="true">edit_note</span><div class="label">Notes</div></ax-tile>
-    <ax-tile columns="4" rows="2" layers="fill reveal" style="--ax-fill-color: #35608a"><span class="icon" aria-hidden="true">partly_cloudy_day</span><div class="label">Weather</div></ax-tile>
-    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #5b3f8a"><span class="icon" aria-hidden="true">storefront</span><div class="label">Store</div></ax-tile>
-    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #2f6e6e"><span class="icon" aria-hidden="true">map</span><div class="label">Maps</div></ax-tile>
-    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #874a4a"><span class="icon" aria-hidden="true">movie</span><div class="label">Video</div></ax-tile>
-    <ax-tile columns="4" rows="2" layers="fill reveal" style="--ax-fill-color: #44506e"><span class="icon" aria-hidden="true">newspaper</span><div class="label">News</div></ax-tile>
+    <ax-tile columns="4" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/mail_48_color.svg"><div class="label">Mail</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/calendar_48_color.svg"><div class="label">Calendar</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/clock_48_color.svg"><div class="label">Clock</div></ax-tile>
+    <ax-tile columns="4" rows="4" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/image_48_color.svg"><div class="label">Photos</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/settings_48_color.svg"><div class="label">Settings</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/headphones_48_color.svg"><div class="label">Music</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/cloud_48_color.svg"><div class="label">OneDrive</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/notebook_32_color.svg"><div class="label">Notes</div></ax-tile>
+    <ax-tile columns="4" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/weather_sunny_low_48_color.svg"><div class="label">Weather</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/building_store_24_color.svg"><div class="label">Store</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/location_ripple_24_color.svg"><div class="label">Maps</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/video_48_color.svg"><div class="label">Video</div></ax-tile>
+    <ax-tile columns="4" rows="2" layers="fill reveal"><img class="icon" alt="" src="../node_modules/@fluentui/svg-icons/icons/news_28_color.svg"><div class="label">News</div></ax-tile>
   </ax-tile-group>
 </section>
 
