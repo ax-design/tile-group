@@ -35,7 +35,7 @@ const cellsOf = (group: HTMLElement) =>
 const expectedCells = (group: HTMLElement, rows = 4) =>
     layoutTiles(
         Array.from(group.children).map((t) => ({ columns: +(t.getAttribute('columns') || 2), rows: +(t.getAttribute('rows') || 2) })),
-        { rows }
+        { rows, strip: +(group.getAttribute('strip') || 4) }
     ).placements.map((p) => [p.column, p.row]);
 const ids = (group: HTMLElement) => Array.from(group.children).map((t) => t.id).join('');
 
@@ -67,6 +67,23 @@ async function run() {
     check('tile sizes follow columns and rows', byId('e').style.width === '172px' && byId('e').style.height === '84px' && byId('f').style.width === '40px', byId('e').style.width);
     check('group size fits the tiles', g.style.height === '172px' && g.style.width === `${(Math.max(...expectedCells(g).map((c, i) => c[0] + [2, 2, 2, 2, 4, 1][i]))) * STEP - 4}px`, `${g.style.width} x ${g.style.height}`);
 
+    // 1b. Style changes are picked up without refresh(): a class sets other sizes.
+    g.classList.add('roomy');
+    await frames(4);
+    check('a style change lays the group out again', byId('a').style.width === '100px' && g.style.height === '268px', `${byId('a').style.width} ${g.style.height}`);
+    g.classList.remove('roomy');
+    await frames(4);
+    await wait(600);
+    check('and back', byId('a').style.width === '84px' && g.style.height === '172px', `${byId('a').style.width} ${g.style.height}`);
+    // The strip attribute changes the fill order.
+    g.setAttribute('strip', '1');
+    await frames(3);
+    check('strip 1 is the WinJS order', JSON.stringify(cellsOf(g).slice(0, 4)) === JSON.stringify([[0, 0], [0, 2], [2, 0], [2, 2]]), JSON.stringify(cellsOf(g)));
+    g.removeAttribute('strip');
+    await frames(3);
+    check('strip 4 (default) fills two medium tiles wide, row by row', JSON.stringify(cellsOf(g).slice(0, 4)) === JSON.stringify([[0, 0], [2, 0], [0, 2], [2, 2]]), JSON.stringify(cellsOf(g)));
+    await wait(600);
+
     // 2. Resizing a tile lays the group out again.
     byId('b').setAttribute('columns', '4');
     await frames(3);
@@ -82,7 +99,7 @@ async function run() {
     pointer('pointerdown', start.x, start.y, 'mouse', a);
     pointer('pointermove', start.x + 2, start.y + 2);
     check('a small move is no drag', events.length === 0, events.join(' '));
-    // Over the place of C (column 2, row 0): two cells right.
+    // Over the place of B (column 2, row 0): two cells right.
     pointer('pointermove', start.x + 2 * STEP, start.y);
     await frames(3);
     // The surface tilt goes back in 50 ms.
@@ -92,15 +109,16 @@ async function run() {
     check('the dragged tile ends its surface press', !surface.debugState || !surface.debugState.tilt);
     check('the dragged tile lifts', /scale\(1\.05\)/.test(a.style.transform) && a.style.opacity === '0.65', `${a.style.transform} ${a.style.opacity}`);
     const preview = cellsOf(g);
-    check('the others make room while dragging', JSON.stringify(preview[2]) === JSON.stringify([0, 2]) && /scale\(0\.95\)/.test(byId('c').style.transform), JSON.stringify(preview));
+    // B moves to the front, A's place.
+    check('the others make room while dragging', JSON.stringify(preview[1]) === JSON.stringify([0, 0]) && /scale\(0\.95\)/.test(byId('b').style.transform), JSON.stringify(preview));
     pointer('pointerup', start.x + 2 * STEP, start.y);
     let clicked = false;
     a.addEventListener('click', () => (clicked = true), { once: true });
     a.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     check('the click after a drop is swallowed', !clicked);
     await frames(2);
-    check('the drop fires tilereorder', events.some((e) => e === 'tilereorder:a:{"from":0,"to":2}'), events.join(' '));
-    check('the drop reorders the children', ids(g) === 'bcadef', ids(g));
+    check('the drop fires tilereorder', events.some((e) => e === 'tilereorder:a:{"from":0,"to":1}'), events.join(' '));
+    check('the drop reorders the children', ids(g) === 'bacdef', ids(g));
     await wait(700);
     check('after the drop the tiles rest in the new layout', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)) && a.style.opacity === '' && !/scale/.test(a.style.transform), JSON.stringify(cellsOf(g)));
     clicked = false;
@@ -149,8 +167,8 @@ async function run() {
     await frames(3);
     pointer('pointerup', p.x + 2 * STEP, p.y, 'touch');
     await frames(2);
-    // Two cells right is the place of h3, at the top of the second column.
-    check('hold mode: a move after the hold drags', ids(h) === 'h2h3h1', ids(h) + ' ' + events.join(' '));
+    // Two cells right is the place of h2, to the right in the first row.
+    check('hold mode: a move after the hold drags', ids(h) === 'h2h1h3', ids(h) + ' ' + events.join(' '));
     await wait(700);
 
     // 6. One context menu event: right click, the menu key, and a held touch.

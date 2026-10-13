@@ -15,14 +15,9 @@ export type { DropOptions, DropTarget } from './reorder.js';
 
 const length = (name: string, initial: string): PropertySpec => ({ name, syntax: { type: 'length' }, initial, inherits: true, register: true });
 
-// Registered so that they compute to px and transition. --tile-rows also takes auto, which
-// registerProperty cannot express with the syntaxes of typed-om; it stays unregistered.
-export const TILE_GROUP_PROPERTIES: PropertySpec[] = [
-    length('--tile-cell-width', '70px'),
-    length('--tile-cell-height', '70px'),
-    length('--tile-gap', '10px'),
-    { name: '--tile-strip', syntax: { type: 'number' }, initial: '1', inherits: true, register: true },
-];
+// Registered so that they compute to px. --tile-rows also takes auto, which registerProperty
+// cannot express with the syntaxes of typed-om; it stays unregistered.
+export const TILE_GROUP_PROPERTIES: PropertySpec[] = [length('--tile-cell-width', '70px'), length('--tile-cell-height', '70px'), length('--tile-gap', '10px')];
 
 let registered = false;
 

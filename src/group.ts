@@ -4,8 +4,13 @@
 // tiles.
 //
 // Sizes come from custom properties on the group: --tile-cell-width, --tile-cell-height,
-// --tile-gap, --tile-rows (a number, or auto for as many rows as the group's height holds) and
-// --tile-strip (see layout.ts).
+// --tile-gap and --tile-rows (a number, or auto for as many rows as the group's height holds).
+// They are read again whenever the style may have changed, with the triggers of Surface (class
+// and attribute changes, hover, media queries and so on); refresh() covers the rest.
+//
+// The strip attribute sets the fill order (see layout.ts): 4 (default) fills columns two medium
+// tiles wide row by row, as the Start screen does; 1 is the column by column order of WinJS,
+// which reorders poorly while dragging.
 //
 // Gestures, set with attributes:
 //   drag="press"    a tile follows the pointer once it moves
@@ -22,6 +27,7 @@
 // places in 367 ms, one after another 33 ms apart (at most 250 ms); a dragged tile grows to 1.05
 // and fades to 0.65 in 240 ms while the others shrink to 0.95, and everything settles in 500 ms
 // on drop; all on cubic-bezier(0.1, 0.9, 0.2, 1).
+import { services } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
 import { layoutTiles } from './layout.js';
 import type { LayoutResult } from './layout.js';
@@ -40,6 +46,7 @@ const OTHERS_SCALE = 0.95;
 // Movement in px before a press becomes a drag (or, before a hold, a pan of the page).
 const SLOP = 6;
 const DEFAULT_HOLD_MS = 500;
+const DEFAULT_STRIP = 4;
 
 const STYLE = `
 :host { display: block; position: relative; }
@@ -54,7 +61,6 @@ interface Metrics {
     gap: number;
     // null: as many as the height holds.
     rows: number | null;
-    strip: number;
 }
 
 interface Shown {
@@ -93,7 +99,7 @@ export class AxTileGroup extends HTMLElement {
     static readonly ElementName: string = 'ax-tile-group';
 
     static get observedAttributes() {
-        return ['drag'];
+        return ['drag', 'strip'];
     }
 
     private root: ShadowRoot;
@@ -130,10 +136,31 @@ export class AxTileGroup extends HTMLElement {
             });
             this.resizeObserver.observe(this);
         }
+        services().triggers.add(this, this.styleTarget);
         this.layout(false);
     }
 
+    // Called by the triggers when the style may have changed: the sizes are read again, and the
+    // tiles move only when they changed.
+    private styleTarget = {
+        invalidateStyle: () => {
+            if (this.styleCheck) return;
+            this.styleCheck = requestAnimationFrame(() => {
+                this.styleCheck = 0;
+                const next = this.readMetrics();
+                const now = this.metrics;
+                if (now && next.cellWidth === now.cellWidth && next.cellHeight === now.cellHeight && next.gap === now.gap && next.rows === now.rows) return;
+                this.metrics = next;
+                this.schedule(true);
+            });
+        },
+    };
+    private styleCheck = 0;
+
     disconnectedCallback() {
+        services().triggers.delete(this);
+        if (this.styleCheck) cancelAnimationFrame(this.styleCheck);
+        this.styleCheck = 0;
         this.removeEventListener('pointerdown', this.onPointerDown);
         this.removeEventListener('contextmenu', this.onContextMenu);
         this.removeEventListener('touchmove', this.onTouchMove);
@@ -145,8 +172,9 @@ export class AxTileGroup extends HTMLElement {
         this.pending = 0;
     }
 
-    attributeChangedCallback() {
-        // touch-action follows the drag mode through the stylesheet; nothing else to do.
+    attributeChangedCallback(name: string) {
+        // touch-action follows the drag mode through the stylesheet.
+        if (name === 'strip' && this.isConnected) this.schedule(true);
     }
 
     // The tiles, in order.
@@ -156,8 +184,9 @@ export class AxTileGroup extends HTMLElement {
         return out;
     }
 
-    // Lays the tiles out again: after a change of the custom properties, which the group does
-    // not watch. Changes of the children and of their columns and rows are picked up by itself.
+    // Reads the sizes and lays the tiles out again, for style changes the triggers cannot see
+    // (see Surface). Changes of the children, of their columns and rows, and most style changes
+    // are picked up by the group itself.
     refresh(): void {
         this.metrics = null;
         this.schedule(true);
@@ -171,6 +200,11 @@ export class AxTileGroup extends HTMLElement {
     private get dragMode(): string {
         const mode = this.getAttribute('drag');
         return mode === 'press' || mode === 'hold' ? mode : 'none';
+    }
+
+    private get strip(): number {
+        const n = parseInt(this.getAttribute('strip') || '', 10);
+        return n > 0 ? n : DEFAULT_STRIP;
     }
 
     private get holdDelay(): number {
@@ -205,13 +239,11 @@ export class AxTileGroup extends HTMLElement {
         const style = getComputedStyle(this);
         const rowsText = style.getPropertyValue('--tile-rows').trim();
         const rows = rowsText === 'auto' ? null : Math.max(1, Math.floor(parseFloat(rowsText) || 6));
-        const strip = Math.max(1, Math.floor(parseFloat(style.getPropertyValue('--tile-strip')) || 1));
         return {
             cellWidth: Math.max(1, this.length(style, '--tile-cell-width', 70)),
             cellHeight: Math.max(1, this.length(style, '--tile-cell-height', 70)),
             gap: Math.max(0, this.length(style, '--tile-gap', 10)),
             rows,
-            strip,
         };
     }
 
@@ -236,7 +268,7 @@ export class AxTileGroup extends HTMLElement {
     // ----- Layout -----
 
     private layoutOf(order: HTMLElement[]): LayoutResult {
-        return layoutTiles(order.map(tileSpan), { rows: this.rows(), strip: this.m.strip });
+        return layoutTiles(order.map(tileSpan), { rows: this.rows(), strip: this.strip });
     }
 
     private layout(animate: boolean, order = this.tiles) {
@@ -463,7 +495,7 @@ export class AxTileGroup extends HTMLElement {
         if (shown && shown.animation) shown.animation.cancel();
         g.tile.style.transform = transformOf(x, y, DRAG_SCALE);
         this.shown.set(g.tile, { x, y, scale: DRAG_SCALE, animation: null });
-        const target = dropTarget(g.order.map(tileSpan), g.from, { column: x / (m.cellWidth + m.gap), row: y / (m.cellHeight + m.gap) }, { rows: this.rows(), strip: m.strip, current: g.to });
+        const target = dropTarget(g.order.map(tileSpan), g.from, { column: x / (m.cellWidth + m.gap), row: y / (m.cellHeight + m.gap) }, { rows: this.rows(), strip: this.strip, current: g.to });
         if (target.index === g.to) return;
         g.to = target.index;
         // The others make room at once.

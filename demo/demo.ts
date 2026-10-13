@@ -52,12 +52,7 @@ drag.addEventListener('change', () => group.setAttribute('drag', drag.value));
 const menuToggle = document.getElementById('menu') as HTMLInputElement;
 menuToggle.addEventListener('change', () => group.toggleAttribute('contextmenu', menuToggle.checked));
 const rows = document.getElementById('rows') as HTMLInputElement;
-rows.addEventListener('input', () => {
-    group.style.setProperty('--tile-rows', rows.value);
-    group.refresh();
-});
+// The group picks up style changes by itself.
+rows.addEventListener('input', () => group.style.setProperty('--tile-rows', rows.value));
 const strip = document.getElementById('strip') as HTMLSelectElement;
-strip.addEventListener('change', () => {
-    group.style.setProperty('--tile-strip', strip.value);
-    group.refresh();
-});
+strip.addEventListener('change', () => group.setAttribute('strip', strip.value));
