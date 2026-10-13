@@ -124,12 +124,12 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 
 * Acrylic tiles inside a `position: sticky` container can show the wrong backdrop in Firefox while tiles move: Firefox renders a `backdrop-filter` under an animated `transform` of an ancestor wrongly there, and the tiles move with transforms.
 * Dragging tiles onto each other to form groups is not there yet (see `grouping`).
-* The vertical layout follows from the horizontal one; the Windows 10 Start menu is not open source, so the order of small tiles inside a medium place may differ from it.
 
 ## Changes
 
 * 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
+* 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
 
 ## Development
 
