@@ -150,6 +150,25 @@ async function run() {
     await wait(700);
     check('and the tiles go back', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)), JSON.stringify(cellsOf(g)));
 
+    // 4b. The dropped tile settles at once, also when it lands late in the order: the stagger
+    // of a reposition used to hold it at the drop point for up to 250 ms (the other tiles all
+    // move back from 0.95 and each took 33 ms of delay before it).
+    {
+        const first = g.children[0] as HTMLElement;
+        const q = center(first);
+        pointer('pointerdown', q.x, q.y, 'mouse', first);
+        pointer('pointermove', q.x + 7 * STEP, q.y + STEP);
+        await frames(3);
+        pointer('pointermove', q.x + 7 * STEP + 2, q.y + STEP);
+        await frames(3);
+        const atDrop = getComputedStyle(first).transform;
+        pointer('pointerup', q.x + 7 * STEP + 2, q.y + STEP);
+        const late = Array.prototype.indexOf.call(g.children, first);
+        await frames(3);
+        check('the dropped tile starts moving at once', late >= 3 && getComputedStyle(first).transform !== atDrop, `index ${late} ${atDrop}`);
+        await wait(700);
+    }
+
     // 5. Hold drag: a quick move is not a drag, a move after the hold is.
     const h = byId('h');
     events.length = 0;

@@ -276,7 +276,9 @@ export class AxTileGroup extends HTMLElement {
         this.applyLayout(order, result, { animate, scale: 1 });
     }
 
-    private applyLayout(order: HTMLElement[], result: LayoutResult, options: { animate: boolean; scale: number; skip?: HTMLElement; duration?: number }) {
+    // Tiles that move go one after another (the reposition of WinJS), unless `together` is set:
+    // settling after a drop starts everywhere at once, so the dropped tile never waits.
+    private applyLayout(order: HTMLElement[], result: LayoutResult, options: { animate: boolean; scale: number; skip?: HTMLElement; duration?: number; together?: boolean }) {
         const m = this.m;
         const stepX = m.cellWidth + m.gap;
         const stepY = m.cellHeight + m.gap;
@@ -293,7 +295,7 @@ export class AxTileGroup extends HTMLElement {
             if (ts.width !== width) ts.width = width;
             if (ts.height !== height) ts.height = height;
             if (tile === options.skip) return;
-            if (this.moveTile(tile, p.column * stepX, p.row * stepY, options.scale, options.animate, moved, options.duration || REPOSITION_MS)) moved++;
+            if (this.moveTile(tile, p.column * stepX, p.row * stepY, options.scale, options.animate, options.together ? 0 : moved, options.duration || REPOSITION_MS)) moved++;
         });
         for (const tile of Array.from(this.shown.keys())) if (tile.parentElement !== this) this.shown.delete(tile);
     }
@@ -524,7 +526,7 @@ export class AxTileGroup extends HTMLElement {
         // The pointerup of a drag is followed by a click on the tile.
         suppressNextClick();
         // Everything settles: the dragged tile into its place, the others back to full size.
-        this.applyLayout(order, this.layoutOf(order), { animate: true, scale: 1, duration: DROP_MS });
+        this.applyLayout(order, this.layoutOf(order), { animate: true, scale: 1, duration: DROP_MS, together: true });
         fadeTo(tile, 1, DROP_MS, () => {
             if (!this.gesture || this.gesture.tile !== tile) tile.style.zIndex = '';
         });
