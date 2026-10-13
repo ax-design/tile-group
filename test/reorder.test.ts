@@ -44,3 +44,13 @@ describe('dropTarget', () => {
         expect(t.layout.placements.map((p) => [p.column, p.row])).toEqual([[0, 0], [0, 2], [2, 2], [4, 0]]);
     });
 });
+
+describe('dropTarget, vertical', () => {
+    test('the dragged tile goes where it is held', () => {
+        // Four medium tiles in a six-cell group: three in the first row, one below.
+        const spans = [medium, medium, medium, medium];
+        const t = dropTarget(spans, 0, { column: 0, row: 2 }, { orientation: 'vertical', columns: 6, strip: 2 });
+        expect(t.index).toBe(3);
+        expect(t.layout.placements[3]).toEqual({ column: 0, row: 2 });
+    });
+});

@@ -57,9 +57,15 @@ Milliseconds of a press before it counts as held. Default `500`.
 
 A right click, the context menu key, and a touch or pen press held for `hold-delay` milliseconds and released without moving fire one event, `tilecontextmenu`. The group shows no menu: listen to the event and show yours.
 
+### orientation
+
+`horizontal` (default): a fixed number of rows, the group grows to the right, like the Windows 8 Start screen. `vertical`: a fixed number of columns, the group grows downward, like the groups of the Windows 10 Start menu; use `--tile-columns` instead of `--tile-rows`. A vertical group is the horizontal layout turned by a quarter, so everything else, dragging included, works the same.
+
 ### strip
 
 The order in which tiles fill the group. `4` (default) fills columns four cells wide (two medium tiles) row by row, like the Start screen. `1` fills column by column, top to bottom, which is the layout of WinJS; tiles jump around much more while you drag.
+
+In a vertical group, strips are rows: `2` (the default there) fills rows one medium tile tall, left to right, like the Start menu. Four small tiles make up one medium place, column by column.
 
 ### grouping
 
@@ -98,7 +104,15 @@ All events are fired on the tile and bubble.
 
 **Default:** `6`
 
-**Description:** The rows of cells in the group. With `auto`, the group takes as many rows as its height holds; give it a height.
+**Description:** The rows of cells in a horizontal group. With `auto`, the group takes as many rows as its height holds; give it a height.
+
+### --tile-columns
+
+**Type:** `<number> | auto`
+
+**Default:** `6`
+
+**Description:** The columns of cells in a vertical group (three medium tiles, as in the Windows 10 Start menu). With `auto`, the group takes as many columns as its width holds.
 
 The group reads these properties again when the style may have changed (classes, attributes, hover, media queries), with the same triggers as Surface. For changes nothing reports, call `refresh()`.
 
@@ -110,6 +124,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 
 * Acrylic tiles inside a `position: sticky` container can show the wrong backdrop in Firefox while tiles move: Firefox renders a `backdrop-filter` under an animated `transform` of an ancestor wrongly there, and the tiles move with transforms.
 * Dragging tiles onto each other to form groups is not there yet (see `grouping`).
+* The vertical layout follows from the horizontal one; the Windows 10 Start menu is not open source, so the order of small tiles inside a medium place may differ from it.
 
 ## Changes
 

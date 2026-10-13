@@ -5,12 +5,16 @@
 //
 // Sizes come from custom properties on the group: --tile-cell-width, --tile-cell-height,
 // --tile-gap and --tile-rows (a number, or auto for as many rows as the group's height holds).
+// With orientation="vertical" the group has a fixed width and grows downward, like the groups
+// of the Windows 10 Start menu: --tile-columns (a number, default 6, or auto for as many columns
+// as its width holds) takes the place of --tile-rows.
 // They are read again whenever the style may have changed, with the triggers of Surface (class
 // and attribute changes, hover, media queries and so on); refresh() covers the rest.
 //
 // The strip attribute sets the fill order (see layout.ts): 4 (default) fills columns two medium
 // tiles wide row by row, as the Start screen does; 1 is the column by column order of WinJS,
-// which reorders poorly while dragging.
+// which reorders poorly while dragging. Vertical groups take 2 by default: medium tiles fill
+// the group row by row.
 //
 // Gestures, set with attributes:
 //   drag="press"    a tile follows the pointer once it moves
@@ -51,6 +55,8 @@ const OTHERS_SCALE = 0.95;
 const SLOP = 6;
 const DEFAULT_HOLD_MS = 500;
 const DEFAULT_STRIP = 4;
+const DEFAULT_STRIP_VERTICAL = 2;
+const DEFAULT_COLUMNS = 6;
 
 const STYLE = `
 /* Tiles tilt when pressed, like the tiles of Windows. The other tilt properties keep the
@@ -69,6 +75,7 @@ interface Metrics {
     gap: number;
     // null: as many as the height holds.
     rows: number | null;
+    columns: number | null;
 }
 
 interface Shown {
@@ -107,7 +114,7 @@ export class AxTileGroup extends HTMLElement {
     static readonly ElementName: string = 'ax-tile-group';
 
     static get observedAttributes() {
-        return ['drag', 'strip'];
+        return ['drag', 'strip', 'orientation'];
     }
 
     private root: ShadowRoot;
@@ -120,7 +127,11 @@ export class AxTileGroup extends HTMLElement {
     private lastPointerType = '';
     private lastPointerTime = 0;
     private metrics: Metrics | null = null;
-    private autoRows = 0;
+    // The rows (horizontal) or columns (vertical) that auto gave last.
+    private autoAcross = 0;
+    // Whether the inline width and height are set by the group.
+    private ownWidth = false;
+    private ownHeight = false;
 
     constructor() {
         super();
@@ -138,9 +149,9 @@ export class AxTileGroup extends HTMLElement {
             this.mutationObserver.observe(this, { childList: true });
         }
         if (typeof ResizeObserver !== 'undefined') {
-            // For --tile-rows: auto, the rows follow the height.
+            // With auto rows or columns, they follow the size.
             this.resizeObserver = new ResizeObserver(() => {
-                if (this.m.rows === null && this.rowsForHeight() !== this.autoRows) this.schedule(true);
+                if (this.isAuto() && this.acrossForSize() !== this.autoAcross) this.schedule(true);
             });
             this.resizeObserver.observe(this);
         }
@@ -157,7 +168,7 @@ export class AxTileGroup extends HTMLElement {
                 this.styleCheck = 0;
                 const next = this.readMetrics();
                 const now = this.metrics;
-                if (now && next.cellWidth === now.cellWidth && next.cellHeight === now.cellHeight && next.gap === now.gap && next.rows === now.rows) return;
+                if (now && next.cellWidth === now.cellWidth && next.cellHeight === now.cellHeight && next.gap === now.gap && next.rows === now.rows && next.columns === now.columns) return;
                 this.metrics = next;
                 this.schedule(true);
             });
@@ -182,7 +193,7 @@ export class AxTileGroup extends HTMLElement {
 
     attributeChangedCallback(name: string) {
         // touch-action follows the drag mode through the stylesheet.
-        if (name === 'strip' && this.isConnected) this.schedule(true);
+        if ((name === 'strip' || name === 'orientation') && this.isConnected) this.schedule(true);
     }
 
     // The tiles, in order.
@@ -210,9 +221,13 @@ export class AxTileGroup extends HTMLElement {
         return mode === 'press' || mode === 'hold' || mode === 'cross-slide' ? mode : 'none';
     }
 
+    private get vertical(): boolean {
+        return this.getAttribute('orientation') === 'vertical';
+    }
+
     private get strip(): number {
         const n = parseInt(this.getAttribute('strip') || '', 10);
-        return n > 0 ? n : DEFAULT_STRIP;
+        return n > 0 ? n : this.vertical ? DEFAULT_STRIP_VERTICAL : DEFAULT_STRIP;
     }
 
     private get holdDelay(): number {
@@ -245,13 +260,16 @@ export class AxTileGroup extends HTMLElement {
 
     private readMetrics(): Metrics {
         const style = getComputedStyle(this);
-        const rowsText = style.getPropertyValue('--tile-rows').trim();
-        const rows = rowsText === 'auto' ? null : Math.max(1, Math.floor(parseFloat(rowsText) || 6));
+        const count = (name: string, fallback: number) => {
+            const text = style.getPropertyValue(name).trim();
+            return text === 'auto' ? null : Math.max(1, Math.floor(parseFloat(text) || fallback));
+        };
         return {
             cellWidth: Math.max(1, this.length(style, '--tile-cell-width', 70)),
             cellHeight: Math.max(1, this.length(style, '--tile-cell-height', 70)),
             gap: Math.max(0, this.length(style, '--tile-gap', 10)),
-            rows,
+            rows: count('--tile-rows', 6),
+            columns: count('--tile-columns', DEFAULT_COLUMNS),
         };
     }
 
@@ -261,22 +279,41 @@ export class AxTileGroup extends HTMLElement {
         return this.metrics;
     }
 
-    private rowsForHeight(): number {
-        const m = this.m;
-        return Math.max(1, Math.floor((this.clientHeight + m.gap) / (m.cellHeight + m.gap)));
+    // Rows of a horizontal group, columns of a vertical one: null when auto.
+    private fixedAcross(): number | null {
+        return this.vertical ? this.m.columns : this.m.rows;
     }
 
-    private rows(): number {
+    private isAuto(): boolean {
+        return this.fixedAcross() === null;
+    }
+
+    // As many as the height (horizontal) or the width (vertical) holds.
+    private acrossForSize(): number {
         const m = this.m;
-        if (m.rows !== null) return m.rows;
-        this.autoRows = this.rowsForHeight();
-        return this.autoRows;
+        return this.vertical
+            ? Math.max(1, Math.floor((this.clientWidth + m.gap) / (m.cellWidth + m.gap)))
+            : Math.max(1, Math.floor((this.clientHeight + m.gap) / (m.cellHeight + m.gap)));
+    }
+
+    private across(): number {
+        const fixed = this.fixedAcross();
+        if (fixed !== null) return fixed;
+        this.autoAcross = this.acrossForSize();
+        return this.autoAcross;
+    }
+
+    private layoutOptions() {
+        const across = this.across();
+        return this.vertical
+            ? { orientation: 'vertical' as const, columns: across, strip: this.strip }
+            : { orientation: 'horizontal' as const, rows: across, strip: this.strip };
     }
 
     // ----- Layout -----
 
     private layoutOf(order: HTMLElement[]): LayoutResult {
-        return layoutTiles(order.map(tileSpan), { rows: this.rows(), strip: this.strip });
+        return layoutTiles(order.map(tileSpan), this.layoutOptions());
     }
 
     private layout(animate: boolean, order = this.tiles) {
@@ -291,8 +328,18 @@ export class AxTileGroup extends HTMLElement {
         const stepX = m.cellWidth + m.gap;
         const stepY = m.cellHeight + m.gap;
         const s = this.style;
-        s.width = `${Math.max(0, result.columns * stepX - m.gap)}px`;
-        if (m.rows !== null) s.height = `${Math.max(0, m.rows * stepY - m.gap)}px`;
+        // The group grows along its direction; across it, it is as wide or tall as its fixed
+        // rows or columns, or left to the page with auto.
+        // Only sizes set here are taken back, never a size of the page's own.
+        const fixed = this.fixedAcross();
+        const width = this.vertical ? (fixed !== null ? fixed * stepX - m.gap : null) : result.columns * stepX - m.gap;
+        const height = this.vertical ? result.rows * stepY - m.gap : fixed !== null ? fixed * stepY - m.gap : null;
+        if (width !== null) s.width = `${Math.max(0, width)}px`;
+        else if (this.ownWidth) s.width = '';
+        if (height !== null) s.height = `${Math.max(0, height)}px`;
+        else if (this.ownHeight) s.height = '';
+        this.ownWidth = width !== null;
+        this.ownHeight = height !== null;
         let moved = 0;
         order.forEach((tile, i) => {
             const span = tileSpan(tile);
@@ -508,7 +555,7 @@ export class AxTileGroup extends HTMLElement {
         if (shown && shown.animation) shown.animation.cancel();
         g.tile.style.transform = transformOf(x, y, DRAG_SCALE);
         this.shown.set(g.tile, { x, y, scale: DRAG_SCALE, animation: null });
-        const target = dropTarget(g.order.map(tileSpan), g.from, { column: x / (m.cellWidth + m.gap), row: y / (m.cellHeight + m.gap) }, { rows: this.rows(), strip: this.strip, current: g.to });
+        const target = dropTarget(g.order.map(tileSpan), g.from, { column: x / (m.cellWidth + m.gap), row: y / (m.cellHeight + m.gap) }, { ...this.layoutOptions(), current: g.to });
         if (target.index === g.to) return;
         g.to = target.index;
         // The others make room at once.

@@ -43,3 +43,28 @@ describe('layoutTiles', () => {
         expect(cells(r)).toEqual([[0, 0], [1, 0]]);
     });
 });
+
+describe('vertical orientation', () => {
+    const v = (items: number[][], columns: number, strip = 2) => layoutTiles(spans(items), { orientation: 'vertical', columns, strip });
+
+    test('medium tiles fill a six-cell group row by row', () => {
+        const r = v([[2, 2], [2, 2], [2, 2], [2, 2]], 6);
+        expect(cells(r)).toEqual([[0, 0], [2, 0], [4, 0], [0, 2]]);
+        expect([r.columns, r.rows]).toEqual([6, 4]);
+    });
+
+    test('a wide tile and medium tiles', () => {
+        const r = v([[4, 2], [2, 2], [2, 2], [4, 4]], 6);
+        expect(cells(r)).toEqual([[0, 0], [4, 0], [0, 2], [2, 2]]);
+        expect(r.rows).toBe(6);
+    });
+
+    test('it is the horizontal layout of the turned tiles, turned back', () => {
+        for (const f of (fixtures as { rows: number; items: number[][] }[]).slice(0, 60)) {
+            const across = layoutTiles(spans(f.items.map((it) => [it[1], it[0], it[2]])), { rows: f.rows, strip: 2 });
+            const down = layoutTiles(spans(f.items), { orientation: 'vertical', columns: f.rows, strip: 2 });
+            expect(cells(down)).toEqual(across.placements.map((p) => [p.row, p.column]));
+            expect([down.columns, down.rows]).toEqual([across.rows, across.columns]);
+        }
+    });
+});

@@ -10,6 +10,12 @@
 // a strip rows go top to bottom, inside a row columns go left to right. With strip 1 this is
 // the column-major order of WinJS (top to bottom, then the next column). With strip 4 (two
 // medium tiles of 2 x 2 cells) medium tiles fill a two-tile-wide column row by row.
+//
+// orientation 'vertical' is the same layout turned by a quarter, for groups of a fixed width
+// that grow downward like the groups of the Windows 10 Start menu: `columns` is fixed, strips
+// are bands of `strip` rows that go top to bottom, inside a band columns go left to right and
+// inside a column rows go top to bottom. With strip 2 (one medium tile) medium tiles fill the
+// group row by row.
 
 export interface TileSpan {
     // Size in cells.
@@ -28,18 +34,38 @@ export interface LayoutResult {
     placements: Placement[];
     // Columns in use, the width of the group in cells.
     columns: number;
+    // Rows in use, the height of the group in cells.
+    rows: number;
 }
 
 export interface LayoutOptions {
-    // Rows of cells in the group.
-    rows: number;
-    // Width of a strip in columns, see above. Default 1.
+    // Rows of cells in the group, for the horizontal orientation.
+    rows?: number;
+    // Columns of cells in the group, for the vertical orientation.
+    columns?: number;
+    // 'horizontal' (default): fixed rows, the group grows to the right. 'vertical': fixed columns,
+    // the group grows downward.
+    orientation?: 'horizontal' | 'vertical';
+    // Size of a strip across the direction of growth, see above. Default 1.
     strip?: number;
 }
 
 export function layoutTiles(spans: TileSpan[], options: LayoutOptions): LayoutResult {
-    const rows = Math.max(1, Math.floor(options.rows));
-    const strip = Math.max(1, Math.floor(options.strip || 1));
+    if (options.orientation === 'vertical') {
+        // The horizontal layout of the turned tiles, turned back.
+        const turned = layoutAcross(
+            spans.map((s) => ({ columns: s.rows, rows: s.columns, newColumn: s.newColumn })),
+            options.columns || 1,
+            options.strip
+        );
+        return { placements: turned.placements.map((p) => ({ column: p.row, row: p.column })), columns: turned.rows, rows: turned.columns };
+    }
+    return layoutAcross(spans, options.rows || 1, options.strip);
+}
+
+function layoutAcross(spans: TileSpan[], across: number, stripSize: number | undefined): LayoutResult {
+    const rows = Math.max(1, Math.floor(across));
+    const strip = Math.max(1, Math.floor(stripSize || 1));
     // occupied[column][row]
     const occupied: boolean[][] = [];
     let width = 0;
@@ -90,5 +116,8 @@ export function layoutTiles(spans: TileSpan[], options: LayoutOptions): LayoutRe
         placements.push(found);
         cursor = { strip: Math.floor(found.column / strip), row: found.row, column: found.column % strip };
     }
-    return { placements, columns: width };
+    // Height in use: the bottom of the lowest tile, within the group.
+    let height = 0;
+    placements.forEach((p, i) => (height = Math.max(height, Math.min(rows, p.row + Math.max(1, Math.floor(spans[i].rows))))));
+    return { placements, columns: width, rows: height };
 }

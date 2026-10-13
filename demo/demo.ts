@@ -14,8 +14,9 @@ const write = (line: string) => {
     log.textContent = `${line}\n${log.textContent}`.slice(0, 4000);
 };
 
+// Every group on the page: the events bubble.
 for (const type of ['tiledragstart', 'tiledragend', 'tilereorder', 'tilecontextmenu']) {
-    group.addEventListener(type, (event) => {
+    document.addEventListener(type, (event) => {
         const detail = (event as CustomEvent).detail;
         write(`${type.padEnd(16)} ${name(event.target as Element)}${detail ? ' ' + JSON.stringify(detail) : ''}`);
     });
@@ -23,7 +24,7 @@ for (const type of ['tiledragstart', 'tiledragend', 'tilereorder', 'tilecontextm
 
 // The context menu is the page's business: the group only says where and for which tile.
 let menuTile: HTMLElement | null = null;
-group.addEventListener('tilecontextmenu', (event) => {
+document.addEventListener('tilecontextmenu', (event) => {
     const { clientX, clientY } = (event as CustomEvent).detail;
     menuTile = event.target as HTMLElement;
     menu.hidden = false;

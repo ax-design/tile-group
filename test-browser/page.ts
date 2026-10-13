@@ -240,6 +240,30 @@ async function run() {
         await wait(700);
     }
 
+    // 5c. Vertical groups: a fixed width, growing downward, medium tiles row by row.
+    {
+        const v = byId('v');
+        check('vertical: medium tiles fill rows of three', JSON.stringify(cellsOf(v)) === JSON.stringify([[0, 0], [2, 0], [4, 0], [0, 2]]), JSON.stringify(cellsOf(v)));
+        check('vertical: fixed width, height from the tiles', v.style.width === `${6 * STEP - 4}px` && v.style.height === `${4 * STEP - 4}px`, `${v.style.width} x ${v.style.height}`);
+        // Drag v1 down two cells: its place is below, where v4 is.
+        record(v);
+        events.length = 0;
+        const q = center(byId('v1'));
+        pointer('pointerdown', q.x, q.y, 'mouse', byId('v1'));
+        pointer('pointermove', q.x, q.y + 2 * STEP, 'mouse');
+        await frames(3);
+        pointer('pointerup', q.x, q.y + 2 * STEP, 'mouse');
+        await frames(2);
+        check('vertical: dragging reorders', ids(v) === 'v2v3v4v1', ids(v) + ' ' + events.join(' '));
+        await wait(700);
+        // auto columns: as many as the width holds (180px: four 40px cells and their gaps).
+        const va = byId('va');
+        check('vertical: auto columns follow the width', JSON.stringify(cellsOf(va)) === JSON.stringify([[0, 0], [2, 0], [0, 2]]) && va.style.width === '', JSON.stringify(cellsOf(va)) + ' ' + va.style.width);
+        // A height of the page's own stays with auto rows.
+        const ha = byId('ha');
+        check('auto rows keep the page\'s own height', ha.style.height === '90px' && JSON.stringify(cellsOf(ha)) === JSON.stringify([[0, 0], [2, 0]]), ha.style.height + ' ' + JSON.stringify(cellsOf(ha)));
+    }
+
     // 6. One context menu event: right click, the menu key, and a held touch.
     events.length = 0;
     const d = byId('d');
