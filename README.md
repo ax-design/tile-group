@@ -45,7 +45,7 @@ The order of the children is the order of the tiles. Tiles fill the group from t
 
 ### drag
 
-`press`: a tile follows the pointer as soon as it moves. `hold`: a tile lifts after a press of `hold-delay` milliseconds, then follows the pointer; a quick move scrolls the page instead. `none` (default): no dragging.
+`press`: a tile follows the pointer as soon as it moves. `hold`: a tile lifts after a press of `hold-delay` milliseconds, then follows the pointer; a quick move scrolls the page instead. `cross-slide`: the touch gesture of Windows 8, for a group in a horizontal scroller such as [`ax-scroll`](https://github.com/ax-design/scroll): a finger that starts moving up or down drags the tile, one that starts sideways scrolls; a held tile lifts and drags in any direction; a mouse drags as with `press`. `none` (default): no dragging.
 
 While a tile is dragged, the others make room for it at once. Escape puts everything back.
 

@@ -15,6 +15,10 @@
 // Gestures, set with attributes:
 //   drag="press"    a tile follows the pointer once it moves
 //   drag="hold"     a tile lifts after a press of hold-delay ms, then follows the pointer
+//   drag="cross-slide"  as on the touch screens of Windows 8, in a horizontal scroller such as
+//                   <ax-scroll>: a finger that starts moving up or down drags the tile, one
+//                   that starts sideways is left to the scroller; a held tile lifts and drags
+//                   in any direction; a mouse drags as with press
 //   drag="none"     (default) no dragging
 //   contextmenu     a right click, the context menu key, and a touch or pen press held for
 //                   hold-delay ms and released without moving fire one event: tilecontextmenu
@@ -56,6 +60,7 @@ const STYLE = `
 ::slotted(*) { position: absolute; left: 0; top: 0; box-sizing: border-box; margin: 0;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 :host([drag="press"]) ::slotted(*) { touch-action: none; }
+:host([drag="cross-slide"]) ::slotted(*) { touch-action: pan-x pinch-zoom; }
 `;
 
 interface Metrics {
@@ -202,7 +207,7 @@ export class AxTileGroup extends HTMLElement {
 
     private get dragMode(): string {
         const mode = this.getAttribute('drag');
-        return mode === 'press' || mode === 'hold' ? mode : 'none';
+        return mode === 'press' || mode === 'hold' || mode === 'cross-slide' ? mode : 'none';
     }
 
     private get strip(): number {
@@ -369,7 +374,8 @@ export class AxTileGroup extends HTMLElement {
         const g = this.gesture;
         if (!g || g.dragging) return;
         g.held = true;
-        if (this.dragMode === 'hold') this.lift();
+        const mode = this.dragMode;
+        if (mode === 'hold' || mode === 'cross-slide') this.lift();
     };
 
     private onPointerMove = (event: PointerEvent) => {
@@ -383,7 +389,9 @@ export class AxTileGroup extends HTMLElement {
         }
         if (Math.hypot(g.x - g.startX, g.y - g.startY) <= SLOP) return;
         const mode = this.dragMode;
-        if (mode === 'press' || (mode === 'hold' && g.held)) this.startDrag();
+        const vertical = Math.abs(g.y - g.startY) > Math.abs(g.x - g.startX);
+        const crossSlide = mode === 'cross-slide' && (g.pointerType === 'mouse' || g.held || vertical);
+        if (mode === 'press' || crossSlide || (mode === 'hold' && g.held)) this.startDrag();
         // Moved before the hold, or without dragging: not ours (a click, or a pan of the page).
         else this.endGesture();
     };

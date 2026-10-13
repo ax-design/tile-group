@@ -204,6 +204,42 @@ async function run() {
     check('hold mode: a move after the hold drags', ids(h) === 'h2h1h3', ids(h) + ' ' + events.join(' '));
     await wait(700);
 
+    // 5b. Cross-slide: a finger that starts sideways is the scroller's, one that starts up or
+    // down drags; a mouse drags either way.
+    {
+        const x = byId('x');
+        record(x);
+        check('cross-slide tiles pan sideways only', /pan-x/.test(getComputedStyle(byId('x1')).touchAction), getComputedStyle(byId('x1')).touchAction);
+        events.length = 0;
+        let q = center(byId('x1'));
+        pointer('pointerdown', q.x, q.y, 'touch', byId('x1'));
+        pointer('pointermove', q.x + 20, q.y + 3, 'touch');
+        pointer('pointermove', q.x + 2 * STEP, q.y, 'touch');
+        await frames(2);
+        pointer('pointerup', q.x + 2 * STEP, q.y, 'touch');
+        check('cross-slide: a sideways touch is no drag', events.length === 0 && ids(x) === 'x1x2x3', events.join(' '));
+        await wait(100);
+        // Down first, then over the place of x2 (two cells right).
+        pointer('pointerdown', q.x, q.y, 'touch', byId('x1'));
+        pointer('pointermove', q.x + 3, q.y + 20, 'touch');
+        await frames(2);
+        pointer('pointermove', q.x + 2 * STEP, q.y, 'touch');
+        await frames(3);
+        pointer('pointerup', q.x + 2 * STEP, q.y, 'touch');
+        await frames(2);
+        check('cross-slide: a touch that starts down drags', events[0] === 'tiledragstart:x1:null' && ids(x) === 'x2x1x3', ids(x) + ' ' + events.join(' '));
+        await wait(700);
+        events.length = 0;
+        q = center(byId('x1'));
+        pointer('pointerdown', q.x, q.y, 'mouse', byId('x1'));
+        pointer('pointermove', q.x - 2 * STEP, q.y, 'mouse');
+        await frames(3);
+        pointer('pointerup', q.x - 2 * STEP, q.y, 'mouse');
+        await frames(2);
+        check('cross-slide: a mouse drags sideways too', ids(x) === 'x1x2x3', ids(x) + ' ' + events.join(' '));
+        await wait(700);
+    }
+
     // 6. One context menu event: right click, the menu key, and a held touch.
     events.length = 0;
     const d = byId('d');
