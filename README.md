@@ -114,6 +114,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 ## Changes
 
 * 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
+* 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 
 ## Development
 
