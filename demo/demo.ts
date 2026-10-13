@@ -1,3 +1,4 @@
+import 'material-symbols/sharp.css';
 import { registerRevealLayer } from '@ax-design/reveal-highlight';
 import { register } from '@ax-design/tile-group';
 import type { AxTileGroup } from '@ax-design/tile-group';
@@ -9,7 +10,7 @@ const group = document.getElementById('group') as AxTileGroup;
 const log = document.getElementById('log') as HTMLElement;
 const menu = document.getElementById('sizeMenu') as HTMLElement;
 
-const name = (tile: Element) => (tile.querySelector('.label') || tile.querySelector('.glyph'))!.textContent;
+const name = (tile: Element) => tile.querySelector('.label')!.textContent;
 const write = (line: string) => {
     log.textContent = `${line}\n${log.textContent}`.slice(0, 4000);
 };

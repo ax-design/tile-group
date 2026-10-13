@@ -37,6 +37,8 @@ If you don't use a bundler, load `build/main.js` (it exposes `AxTileGroup`) or i
 
 `ax-tile` is an [`ax-surface`](https://github.com/ax-design/surface), so the layers, shapes and tilt of Surface work on it. `columns` and `rows` give its size in cells; change them and the other tiles move. Any other element in the group is a tile too, two by two cells unless it has the attributes.
 
+Tiles look and move like the tiles of Windows out of the box: they tilt when pressed (the group sets `--ax-tilt-mode: absolute`, inherited, with the tilt of the original `ax-pressure`), and `ax-tile` has a 2px border for the reveal light. Any style of yours wins over both.
+
 The order of the children is the order of the tiles. Tiles fill the group from the top left: each one takes the first free place after the tile before it, so a tile never jumps in front of an earlier one, and the group grows to the right.
 
 ## Attributes

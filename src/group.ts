@@ -49,7 +49,10 @@ const DEFAULT_HOLD_MS = 500;
 const DEFAULT_STRIP = 4;
 
 const STYLE = `
-:host { display: block; position: relative; }
+/* Tiles tilt when pressed, like the tiles of Windows. The other tilt properties keep the
+   defaults of Surface, which are the ones of the original ax-pressure. Inherited, so a style on
+   the group or on one tile overrides it. */
+:host { display: block; position: relative; --ax-tilt-mode: absolute; }
 ::slotted(*) { position: absolute; left: 0; top: 0; box-sizing: border-box; margin: 0;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 :host([drag="press"]) ::slotted(*) { touch-action: none; }

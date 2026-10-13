@@ -67,6 +67,20 @@ async function run() {
     check('tile sizes follow columns and rows', byId('e').style.width === '172px' && byId('e').style.height === '84px' && byId('f').style.width === '40px', byId('e').style.width);
     check('group size fits the tiles', g.style.height === '172px' && g.style.width === `${(Math.max(...expectedCells(g).map((c, i) => c[0] + [2, 2, 2, 2, 4, 1][i]))) * STEP - 4}px`, `${g.style.width} x ${g.style.height}`);
 
+    // 1a. Tile defaults: pressed tilt and a 2 px border, both below any author style.
+    {
+        const tile = byId('c') as HTMLElement & { debugState: { values: { keyword(n: string): string; length(n: string): number } } };
+        const v = () => tile.debugState.values;
+        check('tiles tilt and have a 2px border by default', v().keyword('--ax-tilt-mode') === 'absolute' && v().length('--ax-border-width') === 2, `${v().keyword('--ax-tilt-mode')} ${v().length('--ax-border-width')}`);
+        g.style.setProperty('--ax-tilt-mode', 'off');
+        tile.style.setProperty('--ax-border-width', '0px');
+        await frames(4);
+        check('author styles override the tile defaults', v().keyword('--ax-tilt-mode') === 'off' && v().length('--ax-border-width') === 0, `${v().keyword('--ax-tilt-mode')} ${v().length('--ax-border-width')}`);
+        g.style.removeProperty('--ax-tilt-mode');
+        tile.style.removeProperty('--ax-border-width');
+        await frames(4);
+    }
+
     // 1b. Style changes are picked up without refresh(): a class sets other sizes.
     g.classList.add('roomy');
     await frames(4);
