@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../node_modules/winjs/css/ui-light.css">
+<style>
+  body { margin: 0; }
+  #lv { width: 2000px; height: 340px; }
+  .win-container { margin: 0 !important; }
+  .t { background: #3d5afe; color: #fff; font: 12px sans-serif; }
+</style></head><body>
+<div id="lv"></div>
+<script src="../../node_modules/winjs/js/base.js"></script>
+<script src="../../node_modules/winjs/js/ui.js"></script>
+<script>
+  // cell 70, gap 0 for the oracle: positions are in cells.
+  window.layoutOf = function (items, rows) {
+    return new Promise(function (done) {
+      var host = document.getElementById('lv');
+      host.style.height = (rows * 70) + 'px';
+      var list = new WinJS.Binding.List(items.map(function (it, i) { return { id: i, w: it[0], h: it[1] }; }));
+      var lv = host.winControl || new WinJS.UI.ListView(host, {});
+      lv.itemTemplate = function (p) { return p.then(function (item) { var d = document.createElement('div'); d.className = 't'; d.style.width = item.data.w * 70 + 'px'; d.style.height = item.data.h * 70 + 'px'; d.textContent = item.data.id; return d; }); };
+      lv.layout = new WinJS.UI.CellSpanningLayout({
+        groupInfo: function () { return { enableCellSpanning: true, cellWidth: 70, cellHeight: 70 }; },
+        itemInfo: function (index) { var it = items[index]; return { width: it[0] * 70, height: it[1] * 70, newColumn: !!it[2] }; }
+      });
+      lv.itemDataSource = list.dataSource;
+      lv.addEventListener('loadingstatechanged', function f() {
+        if (lv.loadingState !== 'complete') return;
+        lv.removeEventListener('loadingstatechanged', f);
+        // The layout's own result: column and row of each item in the occupancy map.
+        var group = lv.layout._groups[0];
+        var out = items.map(function (_, i) { var s = group.getItemSize(i); return s ? [s.column, s.row] : null; });
+        done({ out: out, slotsPerColumn: group._slotsPerColumn, type: group.constructor.name });
+      });
+    });
+  };
+</script></body></html>
