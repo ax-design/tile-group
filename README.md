@@ -111,6 +111,10 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 * Acrylic tiles inside a `position: sticky` container can show the wrong backdrop in Firefox while tiles move: Firefox renders a `backdrop-filter` under an animated `transform` of an ancestor wrongly there, and the tiles move with transforms.
 * Dragging tiles onto each other to form groups is not there yet (see `grouping`).
 
+## Changes
+
+* 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
+
 ## Development
 
 ```bash
