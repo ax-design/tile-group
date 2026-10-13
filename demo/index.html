@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tile Group Demo - Axiom Design System</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #2b2147; color: #f1eefa; font: 14px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { padding: 28px 40px 8px; }
+  h1 { font-size: 34px; font-weight: 300; margin: 0 0 6px; letter-spacing: 0.01em; }
+  header p { margin: 0; color: #c9c0e4; max-width: 720px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 16px 40px; color: #d8d1ee; font-size: 13px; }
+  .controls label { display: flex; gap: 8px; align-items: center; }
+  .controls select, .controls input[type=number] { font: inherit; background: #3a2e5f; color: #f1eefa; border: 1px solid #5a4b8a; border-radius: 4px; padding: 3px 6px; }
+  .controls input[type=number] { width: 56px; }
+  .start { padding: 24px 40px 40px; overflow-x: auto; }
+  .start h2 { font-size: 20px; font-weight: 300; margin: 0 0 14px; }
+
+  ax-tile-group { --tile-cell-width: 70px; --tile-cell-height: 70px; --tile-gap: 10px; --tile-rows: 6; }
+  ax-tile {
+    color: #fff; cursor: default;
+    --ax-border-width: 1px; --reveal-color: rgb(255, 255, 255); --reveal-opacity: 0.25;
+    --ax-tilt-mode: absolute; --ax-tilt-depth: 2px; --ax-tilt-perspective: 400px;
+  }
+  ax-tile .label { position: absolute; left: 10px; bottom: 8px; font-size: 13px; }
+  ax-tile .glyph { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-60%); text-align: center; font-size: 30px; font-weight: 300; opacity: 0.9; }
+  ax-tile[columns="1"] .label { display: none; }
+  ax-tile[columns="1"] .glyph { font-size: 18px; transform: translateY(-50%); }
+
+  .menu { position: fixed; z-index: 10; min-width: 140px; background: #f6f4fb; color: #1d1830; border: 1px solid #c9c0e4; padding: 4px 0; font-size: 13px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+  .menu[hidden] { display: none; }
+  .menu button { display: block; width: 100%; text-align: left; font: inherit; border: 0; background: none; padding: 6px 14px; color: inherit; cursor: pointer; }
+  .menu button:hover { background: #e3ddf3; }
+
+  .log { margin: 0 40px 40px; padding: 10px 14px; background: #241b3c; border-radius: 6px; font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #c9c0e4; height: 130px; overflow: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Start</h1>
+  <p>A tile group laid out like the Windows 8 Start screen. Drag the tiles to reorder them; the others make room while you drag. Right click, press the context menu key, or press and hold a tile with touch or a pen to change its size.</p>
+</header>
+
+<div class="controls">
+  <label>Drag <select id="drag"><option value="press">press</option><option value="hold">hold</option><option value="none">none</option></select></label>
+  <label><input type="checkbox" id="menu" checked> Context menu</label>
+  <label>Rows <input type="number" id="rows" min="2" max="12" value="6"></label>
+  <label>Strip <select id="strip"><option value="1">1 (WinJS)</option><option value="4">4 (two medium tiles)</option></select></label>
+</div>
+
+<section class="start">
+  <h2>Everyday</h2>
+  <ax-tile-group id="group" drag="press" contextmenu>
+    <ax-tile columns="4" rows="2" layers="fill reveal" style="--ax-fill-color: #2d7d9a"><div class="glyph">✉</div><div class="label">Mail</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #6a4c9c"><div class="glyph">31</div><div class="label">Calendar</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #3a7a55"><div class="glyph">◷</div><div class="label">Clock</div></ax-tile>
+    <ax-tile columns="4" rows="4" layers="fill reveal" style="--ax-fill-color: #8a5a3c"><div class="glyph">▣</div><div class="label">Photos</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #4b5d8f"><div class="glyph">⚙</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #7a4566"><div class="glyph">♪</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #3f7f86"><div class="glyph">☁</div></ax-tile>
+    <ax-tile columns="1" rows="1" layers="fill reveal" style="--ax-fill-color: #6b6a3a"><div class="glyph">✎</div></ax-tile>
+    <ax-tile columns="4" rows="2" layers="fill reveal" style="--ax-fill-color: #35608a"><div class="glyph">☀ 23°</div><div class="label">Weather</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #5b3f8a"><div class="glyph">⌂</div><div class="label">Store</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #2f6e6e"><div class="glyph">⚑</div><div class="label">Maps</div></ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill reveal" style="--ax-fill-color: #874a4a"><div class="glyph">▶</div><div class="label">Video</div></ax-tile>
+    <ax-tile columns="4" rows="2" layers="fill reveal" style="--ax-fill-color: #44506e"><div class="glyph">☰</div><div class="label">News</div></ax-tile>
+  </ax-tile-group>
+</section>
+
+<div class="menu" id="sizeMenu" hidden>
+  <button data-size="1 1">Small</button>
+  <button data-size="2 2">Medium</button>
+  <button data-size="4 2">Wide</button>
+  <button data-size="4 4">Large</button>
+</div>
+
+<pre class="log" id="log"></pre>
+<script type="module" src="./demo.ts"></script>
+</body>
+</html>

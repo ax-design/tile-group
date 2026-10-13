@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>tile group browser test</title>
+<style>
+  body { margin: 0; padding: 20px; }
+  ax-tile-group { --tile-cell-width: 40px; --tile-cell-height: 40px; --tile-gap: 4px; --tile-rows: 4; margin-bottom: 30px; }
+  ax-tile { --ax-fill-color: #889; --ax-tilt-mode: absolute; --ax-tilt-depth: 3px; --ax-tilt-perspective: 300px; }
+</style></head>
+<body>
+<ax-tile-group id="g" drag="press" contextmenu>
+  <ax-tile id="a" columns="2" rows="2" layers="fill">A</ax-tile>
+  <ax-tile id="b" columns="2" rows="2" layers="fill">B</ax-tile>
+  <ax-tile id="c" columns="2" rows="2" layers="fill">C</ax-tile>
+  <ax-tile id="d" columns="2" rows="2" layers="fill">D</ax-tile>
+  <ax-tile id="e" columns="4" rows="2" layers="fill">E</ax-tile>
+  <div id="f" columns="1" rows="1" style="background: #99a">F</div>
+</ax-tile-group>
+<ax-tile-group id="h" drag="hold" hold-delay="200">
+  <ax-tile id="h1" columns="2" rows="2" layers="fill">1</ax-tile>
+  <ax-tile id="h2" columns="2" rows="2" layers="fill">2</ax-tile>
+  <ax-tile id="h3" columns="2" rows="2" layers="fill">3</ax-tile>
+</ax-tile-group>
+<script type="module" src="./page.ts"></script>
+</body></html>

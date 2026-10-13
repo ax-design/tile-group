@@ -1,0 +1,37 @@
+// @ax-design/tile-group: tile groups of Axiom Design System, after the Windows 8 Start screen,
+// on the @ax-design/surface engine.
+import { register as registerSurface } from '@ax-design/surface';
+import { registerProperties } from '@ax-design/typed-om';
+import type { PropertySpec } from '@ax-design/typed-om';
+import { AxTileGroup } from './group.js';
+import { AxTile } from './tile.js';
+
+export { AxTileGroup } from './group.js';
+export { AxTile, tileSpan } from './tile.js';
+export { layoutTiles } from './layout.js';
+export type { LayoutOptions, LayoutResult, Placement, TileSpan } from './layout.js';
+export { dropTarget, moveIndex } from './reorder.js';
+export type { DropOptions, DropTarget } from './reorder.js';
+
+const length = (name: string, initial: string): PropertySpec => ({ name, syntax: { type: 'length' }, initial, inherits: true, register: true });
+
+// Registered so that they compute to px and transition. --tile-rows also takes auto, which
+// registerProperty cannot express with the syntaxes of typed-om; it stays unregistered.
+export const TILE_GROUP_PROPERTIES: PropertySpec[] = [
+    length('--tile-cell-width', '70px'),
+    length('--tile-cell-height', '70px'),
+    length('--tile-gap', '10px'),
+    { name: '--tile-strip', syntax: { type: 'number' }, initial: '1', inherits: true, register: true },
+];
+
+let registered = false;
+
+// Defines <ax-tile-group>, <ax-tile> and <ax-surface>. Safe to call more than once.
+export function register(): void {
+    if (registered) return;
+    registered = true;
+    registerProperties(TILE_GROUP_PROPERTIES);
+    registerSurface();
+    if (!customElements.get(AxTile.ElementName)) customElements.define(AxTile.ElementName, AxTile);
+    if (!customElements.get(AxTileGroup.ElementName)) customElements.define(AxTileGroup.ElementName, AxTileGroup);
+}
