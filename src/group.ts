@@ -42,7 +42,6 @@ import type { LayoutResult } from './layout.js';
 import { dropTarget, moveIndex } from './reorder.js';
 import { tileSpan } from './tile.js';
 
-const EASE = 'cubic-bezier(0.1, 0.9, 0.2, 1)';
 const REPOSITION_MS = 367;
 const STAGGER_MS = 33;
 const STAGGER_CAP_MS = 250;
@@ -365,9 +364,9 @@ export class AxTileGroup extends HTMLElement {
         if (before && before.animation) before.animation.cancel();
         tile.style.transform = to;
         let animation: Motion | null = null;
-        if (animate && before && typeof tile.animate === 'function') {
+        if (animate && before) {
             const delay = Math.min(STAGGER_CAP_MS, staggerIndex * STAGGER_MS);
-            animation = SCRIPTED_MOTION ? new ScriptedMove(tile, from, to, duration, delay) : tile.animate([{ transform: from }, { transform: to }], { duration, delay, easing: EASE, fill: 'backwards' });
+            animation = new ScriptedMove(tile, from, to, duration, delay);
         }
         this.shown.set(tile, { x, y, scale, animation });
         return !!animation;
@@ -619,19 +618,16 @@ export class AxTileGroup extends HTMLElement {
     }
 }
 
-// What a moving tile needs of its animation: Animation, or ScriptedMove.
+// Tiles move and fade by script, frame by frame, not with the Web Animations API: Firefox draws
+// a backdrop-filter (acrylic) in a tile clear while a transform animation of the tile runs, and
+// Chromium leaves a dropped acrylic tile clear for a moment. Changing the style every frame
+// keeps the glass in both, and every engine moves the same way.
 interface Motion {
     readonly playState: string;
     cancel(): void;
 }
 
-// Firefox draws a backdrop-filter (acrylic) in a tile clear while a transform animation of the
-// tile runs, but not while script changes the transform frame by frame: there tiles move by
-// script. Other engines run the animation off the main thread. -moz-appearance exists in Gecko
-// only.
-const SCRIPTED_MOTION = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('-moz-appearance', 'none');
-
-// cubic-bezier(0.1, 0.9, 0.2, 1), the EASE of the animations, for the scripted ones.
+// cubic-bezier(0.1, 0.9, 0.2, 1), the curve of every motion (WinJS).
 function ease(t: number): number {
     const [x1, y1, x2, y2] = [0.1, 0.9, 0.2, 1];
     const at = (a: number, b: number, u: number) => 3 * a * u * (1 - u) * (1 - u) + 3 * b * u * u * (1 - u) + u * u * u;
@@ -665,7 +661,7 @@ function placedOf(transform: string): Placed {
 }
 
 // A tile moving from one transform to another by script, frame by frame, with the timing of
-// the animations: a delay showing the start, then the EASE curve.
+// the animations: a delay showing the start, then the curve of ease().
 class ScriptedMove implements Motion {
     playState = 'running';
     private frame = 0;
@@ -728,23 +724,35 @@ function dragOpacity(tile: HTMLElement): number {
     return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : DRAG_OPACITY;
 }
 
+// The fade running on each tile, so a new one stops it.
+const fades = new WeakMap<HTMLElement, number>();
+
 function fadeTo(tile: HTMLElement, opacity: number, duration: number, done?: () => void) {
-    const from = getComputedStyle(tile).opacity;
-    tile.style.opacity = opacity === 1 ? '' : String(opacity);
-    // No animation when nothing changes: a running opacity animation alone, even from 1 to 1,
-    // makes the tile a backdrop root, and the acrylic in it turns clear while it runs.
-    if (typeof tile.animate !== 'function') {
-        if (done) done();
-        return;
-    }
-    if (parseFloat(from) === opacity) {
-        // The same moment as with an animation: a dropped tile stays above the others until it
-        // has landed.
+    const running = fades.get(tile);
+    if (running) cancelAnimationFrame(running);
+    fades.delete(tile);
+    const from = parseFloat(getComputedStyle(tile).opacity);
+    const end = opacity === 1 ? '' : String(opacity);
+    if (from === opacity) {
+        tile.style.opacity = end;
+        // The same moment as a fade: a dropped tile stays above the others until it has landed.
         if (done) window.setTimeout(done, duration);
         return;
     }
-    const animation = tile.animate([{ opacity: from }, { opacity: String(opacity) }], { duration, easing: EASE });
-    if (done) animation.onfinish = done;
+    const start = performance.now();
+    const step = (now: number) => {
+        const t = Math.min(1, (now - start) / duration);
+        if (t >= 1) {
+            tile.style.opacity = end;
+            fades.delete(tile);
+            if (done) done();
+            return;
+        }
+        tile.style.opacity = String(from + (opacity - from) * ease(t));
+        fades.set(tile, requestAnimationFrame(step));
+    };
+    tile.style.opacity = String(from);
+    fades.set(tile, requestAnimationFrame(step));
 }
 
 // A drag or a held touch ends with a click on the tile; it is not a click.

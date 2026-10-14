@@ -103,12 +103,10 @@ async function run() {
     // 2. Resizing a tile lays the group out again.
     byId('b').setAttribute('columns', '4');
     await frames(3);
-    // Firefox draws acrylic in a tile clear during a transform animation: there tiles move by
-    // script, frame by frame.
-    if (CSS.supports('-moz-appearance', 'none')) {
-        const moving = Array.from(g.children).flatMap((t) => t.getAnimations().filter((x) => ((x.effect as KeyframeEffect | null)?.getKeyframes() ?? []).some((k) => 'transform' in k)));
-        check('Firefox: tiles move without transform animations', moving.length === 0, String(moving.length));
-    }
+    // Tiles move by script, frame by frame, with no animation of the browser: those turn acrylic
+    // in a tile clear (Firefox while they run, Chromium after a drop).
+    const moving = Array.from(g.children).flatMap((t) => t.getAnimations());
+    check('tiles move without animations of the browser', moving.length === 0, String(moving.length));
     await wait(650);
     check('a tile resize moves the others', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)), JSON.stringify(cellsOf(g)));
     byId('b').setAttribute('columns', '2');
@@ -130,6 +128,8 @@ async function run() {
     const surface = a as HTMLElement & { debugState?: { tilt: unknown } };
     check('drag start fires tiledragstart', events[0] === 'tiledragstart:a:null', events.join(' '));
     check('the dragged tile ends its surface press', !surface.debugState || !surface.debugState.tilt);
+    // The lift fades in 240 ms.
+    await wait(150);
     check('the dragged tile lifts', /scale\(1\.05\)/.test(a.style.transform) && a.style.opacity === '0.65', `${a.style.transform} ${a.style.opacity}`);
     // Wait for the others to arrive (the dragged tile has lifted by now).
     await wait(650);

@@ -126,11 +126,10 @@ The group reads these properties again when the style may have changed (classes,
 
 ## Motion
 
-The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles move to new places in 367 ms, one after another 33 ms apart; a dragged tile grows to 1.05 and fades to 0.65 in 240 ms while the others shrink to 0.95, and everything settles in 500 ms on drop. The layout with `strip="1"` is the cell-spanning layout of WinJS; the tests compare it with layouts recorded from WinJS.
+Tiles move and fade by script, frame by frame, in every engine, not with the Web Animations API: animations of the browser turn acrylic in a tile clear (Firefox while they run, Chromium for a moment after a drop). The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles move to new places in 367 ms, one after another 33 ms apart; a dragged tile grows to 1.05 and fades to 0.65 in 240 ms while the others shrink to 0.95, and everything settles in 500 ms on drop. The layout with `strip="1"` is the cell-spanning layout of WinJS; the tests compare it with layouts recorded from WinJS.
 
 ## Known issues
 
-* Firefox draws a `backdrop-filter` (acrylic) in a tile clear while a transform animation of the tile runs, so in Firefox the tiles move by script, frame by frame, with the same timing. Other engines run the animations off the main thread.
 * Dragging tiles onto each other to form groups is not there yet (see `grouping`).
 
 ## Changes
@@ -138,7 +137,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 * 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
-* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves. A dropped tile stays above the others until it has landed, also when its opacity does not change. In Firefox, tiles move by script, so acrylic in them stays drawn while they move.
+* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves. A dropped tile stays above the others until it has landed, also when its opacity does not change. Tiles move and fade by script in every engine, so acrylic in them stays drawn.
 
 ## Development
 
