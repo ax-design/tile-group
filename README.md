@@ -45,7 +45,7 @@ The order of the children is the order of the tiles. Tiles fill the group from t
 
 ### drag
 
-`press`: a tile follows the pointer as soon as it moves. `hold`: a tile lifts after a press of `hold-delay` milliseconds, then follows the pointer; a quick move scrolls the page instead. `cross-slide`: the touch gesture of Windows 8, for a group in a horizontal scroller such as [`ax-scroll`](https://github.com/ax-design/scroll): a finger that starts moving up or down drags the tile, one that starts sideways scrolls; a held tile lifts and drags in any direction; a mouse drags as with `press`. `none` (default): no dragging.
+`press`: a tile follows the pointer as soon as it moves. `hold`: a tile lifts after a press of `hold-delay` milliseconds, then follows the pointer; a quick move scrolls the page instead. `cross-slide`: the touch gesture of Windows 8, for a group in a horizontal scroller such as [`ax-scroll`](https://github.com/ax-design/scroll): a finger that starts moving up or down drags the tile, one that starts sideways scrolls; a finger or pen held still lifts the tile, which then drags in any direction; a mouse drags as with `press`, once it moves, and holding it still does nothing. `none` (default): no dragging.
 
 While a tile is dragged, the others make room for it at once. Escape puts everything back.
 
@@ -138,7 +138,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 * 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
-* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped.
+* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves.
 
 ## Development
 

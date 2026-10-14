@@ -238,6 +238,24 @@ async function run() {
         await frames(2);
         check('cross-slide: a mouse drags sideways too', ids(x) === 'x1x2x3', ids(x) + ' ' + events.join(' '));
         await wait(700);
+        // A held mouse is a press, not a drag; a held finger lifts the tile.
+        events.length = 0;
+        q = center(byId('x1'));
+        pointer('pointerdown', q.x, q.y, 'mouse', byId('x1'));
+        await wait(650);
+        const mouseHeld = byId('x1').style.transform;
+        pointer('pointerup', q.x, q.y, 'mouse');
+        let mouseClicked = false;
+        byId('x1').addEventListener('click', () => (mouseClicked = true), { once: true });
+        byId('x1').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        check('cross-slide: a held mouse does not lift the tile', !/scale/.test(mouseHeld) && events.length === 0 && mouseClicked, `${mouseHeld} ${events.join(' ')} clicked=${mouseClicked}`);
+        await wait(100);
+        pointer('pointerdown', q.x, q.y, 'touch', byId('x1'));
+        await wait(650);
+        const touchHeld = byId('x1').style.transform;
+        pointer('pointerup', q.x, q.y, 'touch');
+        check('cross-slide: a held finger lifts the tile', /scale\(1\.05\)/.test(touchHeld), touchHeld);
+        await wait(700);
     }
 
     // 5c. Vertical groups: a fixed width, growing downward, medium tiles row by row.

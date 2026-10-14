@@ -422,7 +422,10 @@ export class AxTileGroup extends HTMLElement {
         if (!g || g.dragging) return;
         g.held = true;
         const mode = this.dragMode;
-        if (mode === 'hold' || mode === 'cross-slide') this.lift();
+        // In cross-slide, holding still lifts a tile under a finger or a pen, which can not tell a
+        // drag from a pan otherwise. A mouse drags only once it moves, as on Windows: holding it
+        // still is a press, and letting go a click.
+        if (mode === 'hold' || (mode === 'cross-slide' && g.pointerType !== 'mouse')) this.lift();
     };
 
     private onPointerMove = (event: PointerEvent) => {
