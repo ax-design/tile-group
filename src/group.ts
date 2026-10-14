@@ -82,7 +82,7 @@ interface Shown {
     x: number;
     y: number;
     scale: number;
-    animation: Animation | null;
+    animation: Motion | null;
 }
 
 interface Gesture {
@@ -364,10 +364,10 @@ export class AxTileGroup extends HTMLElement {
         const from = before ? currentTransform(tile, before) : '';
         if (before && before.animation) before.animation.cancel();
         tile.style.transform = to;
-        let animation: Animation | null = null;
+        let animation: Motion | null = null;
         if (animate && before && typeof tile.animate === 'function') {
             const delay = Math.min(STAGGER_CAP_MS, staggerIndex * STAGGER_MS);
-            animation = tile.animate([{ transform: from }, { transform: to }], { duration, delay, easing: EASE, fill: 'backwards' });
+            animation = SCRIPTED_MOTION ? new ScriptedMove(tile, from, to, duration, delay) : tile.animate([{ transform: from }, { transform: to }], { duration, delay, easing: EASE, fill: 'backwards' });
         }
         this.shown.set(tile, { x, y, scale, animation });
         return !!animation;
@@ -619,6 +619,94 @@ export class AxTileGroup extends HTMLElement {
     }
 }
 
+// What a moving tile needs of its animation: Animation, or ScriptedMove.
+interface Motion {
+    readonly playState: string;
+    cancel(): void;
+}
+
+// Firefox draws a backdrop-filter (acrylic) in a tile clear while a transform animation of the
+// tile runs, but not while script changes the transform frame by frame: there tiles move by
+// script. Other engines run the animation off the main thread. -moz-appearance exists in Gecko
+// only.
+const SCRIPTED_MOTION = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('-moz-appearance', 'none');
+
+// cubic-bezier(0.1, 0.9, 0.2, 1), the EASE of the animations, for the scripted ones.
+function ease(t: number): number {
+    const [x1, y1, x2, y2] = [0.1, 0.9, 0.2, 1];
+    const at = (a: number, b: number, u: number) => 3 * a * u * (1 - u) * (1 - u) + 3 * b * u * u * (1 - u) + u * u * u;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 24; i++) {
+        const mid = (lo + hi) / 2;
+        if (at(x1, x2, mid) < t) lo = mid;
+        else hi = mid;
+    }
+    return at(y1, y2, (lo + hi) / 2);
+}
+
+interface Placed {
+    x: number;
+    y: number;
+    scale: number;
+}
+
+// translate(x, y) scale(s) as transformOf writes it, or a matrix of one as getComputedStyle
+// returns it (the origin is applied apart, so the matrix is matrix(s, 0, 0, s, x, y)).
+function placedOf(transform: string): Placed {
+    const matrix = /^matrix\(([^)]+)\)$/.exec(transform);
+    if (matrix) {
+        const m = matrix[1].split(',').map(parseFloat);
+        return { x: m[4], y: m[5], scale: m[0] };
+    }
+    const t = /translate\((-?[\d.e-]+)px(?:,\s*(-?[\d.e-]+)px)?\)/.exec(transform);
+    const s = /scale\((-?[\d.e-]+)\)/.exec(transform);
+    return { x: t ? +t[1] : 0, y: t && t[2] ? +t[2] : 0, scale: s ? +s[1] : 1 };
+}
+
+// A tile moving from one transform to another by script, frame by frame, with the timing of
+// the animations: a delay showing the start, then the EASE curve.
+class ScriptedMove implements Motion {
+    playState = 'running';
+    private frame = 0;
+    private readonly start = performance.now();
+    private readonly from: Placed;
+    private readonly to: Placed;
+
+    constructor(
+        private readonly tile: HTMLElement,
+        from: string,
+        private readonly end: string,
+        private readonly duration: number,
+        private readonly delay: number
+    ) {
+        this.from = placedOf(from);
+        this.to = placedOf(end);
+        tile.style.transform = from;
+        this.frame = requestAnimationFrame(this.step);
+    }
+
+    private step = (now: number) => {
+        const t = Math.min(1, Math.max(0, (now - this.start - this.delay) / this.duration));
+        if (t >= 1) {
+            this.tile.style.transform = this.end;
+            this.playState = 'finished';
+            this.frame = 0;
+            return;
+        }
+        const k = ease(t);
+        const { from, to } = this;
+        this.tile.style.transform = transformOf(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k, from.scale + (to.scale - from.scale) * k);
+        this.frame = requestAnimationFrame(this.step);
+    };
+
+    cancel() {
+        if (this.frame) cancelAnimationFrame(this.frame);
+        this.frame = 0;
+        this.playState = 'idle';
+    }
+}
+
 function transformOf(x: number, y: number, scale: number): string {
     return scale === 1 ? `translate(${x}px, ${y}px)` : `translate(${x}px, ${y}px) scale(${scale})`;
 }
@@ -645,8 +733,14 @@ function fadeTo(tile: HTMLElement, opacity: number, duration: number, done?: () 
     tile.style.opacity = opacity === 1 ? '' : String(opacity);
     // No animation when nothing changes: a running opacity animation alone, even from 1 to 1,
     // makes the tile a backdrop root, and the acrylic in it turns clear while it runs.
-    if (typeof tile.animate !== 'function' || parseFloat(from) === opacity) {
+    if (typeof tile.animate !== 'function') {
         if (done) done();
+        return;
+    }
+    if (parseFloat(from) === opacity) {
+        // The same moment as with an animation: a dropped tile stays above the others until it
+        // has landed.
+        if (done) window.setTimeout(done, duration);
         return;
     }
     const animation = tile.animate([{ opacity: from }, { opacity: String(opacity) }], { duration, easing: EASE });

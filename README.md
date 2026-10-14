@@ -130,7 +130,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 
 ## Known issues
 
-* Acrylic tiles inside a `position: sticky` container can show the wrong backdrop in Firefox while tiles move: Firefox renders a `backdrop-filter` under an animated `transform` of an ancestor wrongly there, and the tiles move with transforms.
+* Firefox draws a `backdrop-filter` (acrylic) in a tile clear while a transform animation of the tile runs, so in Firefox the tiles move by script, frame by frame, with the same timing. Other engines run the animations off the main thread.
 * Dragging tiles onto each other to form groups is not there yet (see `grouping`).
 
 ## Changes
@@ -138,7 +138,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 * 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
-* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves.
+* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves. A dropped tile stays above the others until it has landed, also when its opacity does not change. In Firefox, tiles move by script, so acrylic in them stays drawn while they move.
 
 ## Development
 

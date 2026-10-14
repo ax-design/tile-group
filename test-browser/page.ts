@@ -92,15 +92,24 @@ async function run() {
     // The strip attribute changes the fill order.
     g.setAttribute('strip', '1');
     await frames(3);
+    await wait(650);
     check('strip 1 is the WinJS order', JSON.stringify(cellsOf(g).slice(0, 4)) === JSON.stringify([[0, 0], [0, 2], [2, 0], [2, 2]]), JSON.stringify(cellsOf(g)));
     g.removeAttribute('strip');
     await frames(3);
+    await wait(650);
     check('strip 4 (default) fills two medium tiles wide, row by row', JSON.stringify(cellsOf(g).slice(0, 4)) === JSON.stringify([[0, 0], [2, 0], [0, 2], [2, 2]]), JSON.stringify(cellsOf(g)));
     await wait(600);
 
     // 2. Resizing a tile lays the group out again.
     byId('b').setAttribute('columns', '4');
     await frames(3);
+    // Firefox draws acrylic in a tile clear during a transform animation: there tiles move by
+    // script, frame by frame.
+    if (CSS.supports('-moz-appearance', 'none')) {
+        const moving = Array.from(g.children).flatMap((t) => t.getAnimations().filter((x) => ((x.effect as KeyframeEffect | null)?.getKeyframes() ?? []).some((k) => 'transform' in k)));
+        check('Firefox: tiles move without transform animations', moving.length === 0, String(moving.length));
+    }
+    await wait(650);
     check('a tile resize moves the others', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)), JSON.stringify(cellsOf(g)));
     byId('b').setAttribute('columns', '2');
     await frames(3);
@@ -122,6 +131,8 @@ async function run() {
     check('drag start fires tiledragstart', events[0] === 'tiledragstart:a:null', events.join(' '));
     check('the dragged tile ends its surface press', !surface.debugState || !surface.debugState.tilt);
     check('the dragged tile lifts', /scale\(1\.05\)/.test(a.style.transform) && a.style.opacity === '0.65', `${a.style.transform} ${a.style.opacity}`);
+    // Wait for the others to arrive (the dragged tile has lifted by now).
+    await wait(650);
     const preview = cellsOf(g);
     // B moves to the front, A's place.
     check('the others make room while dragging', JSON.stringify(preview[1]) === JSON.stringify([0, 0]) && /scale\(0\.95\)/.test(byId('b').style.transform), JSON.stringify(preview));
@@ -195,6 +206,7 @@ async function run() {
     await wait(100);
     pointer('pointerdown', p.x, p.y, 'touch', byId('h1'));
     await wait(300);
+    await wait(300);
     check('hold mode: the held tile lifts', /scale\(1\.05\)/.test(byId('h1').style.transform), byId('h1').style.transform);
     pointer('pointermove', p.x + 2 * STEP, p.y, 'touch');
     await frames(3);
@@ -251,7 +263,8 @@ async function run() {
         check('cross-slide: a held mouse does not lift the tile', !/scale/.test(mouseHeld) && events.length === 0 && mouseClicked, `${mouseHeld} ${events.join(' ')} clicked=${mouseClicked}`);
         await wait(100);
         pointer('pointerdown', q.x, q.y, 'touch', byId('x1'));
-        await wait(650);
+        // The hold (500 ms) and the lift (240 ms).
+        await wait(900);
         const touchHeld = byId('x1').style.transform;
         pointer('pointerup', q.x, q.y, 'touch');
         check('cross-slide: a held finger lifts the tile', /scale\(1\.05\)/.test(touchHeld), touchHeld);
@@ -327,7 +340,10 @@ async function run() {
     check('--tile-drag-opacity: 1 keeps a dragged tile opaque', /scale\(1\.05\)/.test(glass.style.transform) && glass.style.opacity === '', `${glass.style.transform} ${glass.style.opacity}`);
     pointer('pointermove', from.x, from.y);
     pointer('pointerup', from.x, from.y);
-    await wait(700);
+    await wait(100);
+    check('an opaque dropped tile stays above the others while it lands', glass.style.zIndex === '1', glass.style.zIndex);
+    await wait(600);
+    check('and goes back among them once it has landed', glass.style.zIndex === '', glass.style.zIndex);
     glass.style.removeProperty('--tile-drag-opacity');
     if (dragBefore === null) g.removeAttribute('drag');
     else g.setAttribute('drag', dragBefore);
