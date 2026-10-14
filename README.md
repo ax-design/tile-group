@@ -1,6 +1,13 @@
-# Tile Group
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ax-design/tile-group/master/docs/logo-r.png">
+    <img src="https://raw.githubusercontent.com/ax-design/tile-group/master/docs/logo.png" alt="Ax Tile Group">
+  </picture>
+</h1>
 
-Web components that implement the tile groups of Axiom Design System, after the Windows 8 Start screen: tiles of any size on a grid of cells, reordered by dragging while the other tiles make room.
+<p align="center">
+  Web component that implements The Tile Group of Axiom Design System.
+</p>
 
 ## Installation
 
