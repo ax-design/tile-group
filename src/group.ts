@@ -640,7 +640,9 @@ function dragOpacity(tile: HTMLElement): number {
 function fadeTo(tile: HTMLElement, opacity: number, duration: number, done?: () => void) {
     const from = getComputedStyle(tile).opacity;
     tile.style.opacity = opacity === 1 ? '' : String(opacity);
-    if (typeof tile.animate !== 'function') {
+    // No animation when nothing changes: a running opacity animation alone, even from 1 to 1,
+    // makes the tile a backdrop root, and the acrylic in it turns clear while it runs.
+    if (typeof tile.animate !== 'function' || parseFloat(from) === opacity) {
         if (done) done();
         return;
     }

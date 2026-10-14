@@ -300,7 +300,11 @@ async function run() {
     const from = center(glass);
     pointer('pointerdown', from.x, from.y, 'mouse', glass);
     pointer('pointermove', from.x + 2 * STEP, from.y);
-    await frames(3);
+    await frames(1);
+    // A running opacity animation, even from 1 to 1, would make the tile a backdrop root.
+    const opacityAnimations = glass.getAnimations().filter((x) => ((x.effect as KeyframeEffect | null)?.getKeyframes() ?? []).some((k) => 'opacity' in k)).length;
+    check('an opaque dragged tile runs no opacity animation', opacityAnimations === 0, String(opacityAnimations));
+    await frames(2);
     await wait(300);
     check('--tile-drag-opacity: 1 keeps a dragged tile opaque', /scale\(1\.05\)/.test(glass.style.transform) && glass.style.opacity === '', `${glass.style.transform} ${glass.style.opacity}`);
     pointer('pointermove', from.x, from.y);
