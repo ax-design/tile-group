@@ -515,7 +515,7 @@ export class AxTileGroup extends HTMLElement {
         const shown = this.shown.get(g.tile);
         if (shown) this.moveTile(g.tile, shown.x, shown.y, DRAG_SCALE, true, 0, LIFT_MS);
         g.tile.style.zIndex = '1';
-        fadeTo(g.tile, DRAG_OPACITY, LIFT_MS);
+        fadeTo(g.tile, dragOpacity(g.tile), LIFT_MS);
         for (const tile of this.tiles) {
             if (tile === g.tile) continue;
             const s = this.shown.get(tile);
@@ -627,6 +627,14 @@ function currentTransform(tile: HTMLElement, shown: Shown): string {
         if (value && value !== 'none') return value;
     }
     return transformOf(shown.x, shown.y, shown.scale);
+}
+
+// The opacity of a dragged tile: --tile-drag-opacity, or the 0.65 of Windows. Below 1 the tile
+// is a backdrop root, so a backdrop-filter in it (acrylic) shows nothing behind the tile while
+// it is dragged; such tiles set 1.
+function dragOpacity(tile: HTMLElement): number {
+    const value = parseFloat(getComputedStyle(tile).getPropertyValue('--tile-drag-opacity'));
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : DRAG_OPACITY;
 }
 
 function fadeTo(tile: HTMLElement, opacity: number, duration: number, done?: () => void) {

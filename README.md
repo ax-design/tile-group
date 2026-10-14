@@ -114,6 +114,14 @@ All events are fired on the tile and bubble.
 
 **Description:** The columns of cells in a vertical group (three medium tiles, as in the Windows 10 Start menu). With `auto`, the group takes as many columns as its width holds.
 
+### --tile-drag-opacity
+
+**Type:** `<number>`
+
+**Default:** `0.65`
+
+**Description:** The opacity of a dragged tile, inherited, so you can set it on the group or on one tile. Set `1` for tiles with acrylic, or anything else with a `backdrop-filter`: an element with an opacity below 1 is a backdrop root, so the filter inside it sees nothing behind the tile, and the glass turns clear while the tile is dragged.
+
 The group reads these properties again when the style may have changed (classes, attributes, hover, media queries), with the same triggers as Surface. For changes nothing reports, call `refresh()`.
 
 ## Motion
@@ -130,6 +138,7 @@ The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles m
 * 0.1.1: Built on Surface 0.2.1, which ends the press of a tile at once when a drag starts.
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
+* 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic.
 
 ## Development
 

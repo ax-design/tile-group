@@ -291,6 +291,25 @@ async function run() {
     pointer('pointerup', p.x, p.y, 'touch', d);
     check('a short touch is no context menu', events.length === 0, events.join(' '));
 
+    // 7. --tile-drag-opacity: a tile with acrylic stays opaque while dragged.
+    await wait(700);
+    const dragBefore = g.getAttribute('drag');
+    g.setAttribute('drag', 'press');
+    const glass = byId('a');
+    glass.style.setProperty('--tile-drag-opacity', '1');
+    const from = center(glass);
+    pointer('pointerdown', from.x, from.y, 'mouse', glass);
+    pointer('pointermove', from.x + 2 * STEP, from.y);
+    await frames(3);
+    await wait(300);
+    check('--tile-drag-opacity: 1 keeps a dragged tile opaque', /scale\(1\.05\)/.test(glass.style.transform) && glass.style.opacity === '', `${glass.style.transform} ${glass.style.opacity}`);
+    pointer('pointermove', from.x, from.y);
+    pointer('pointerup', from.x, from.y);
+    await wait(700);
+    glass.style.removeProperty('--tile-drag-opacity');
+    if (dragBefore === null) g.removeAttribute('drag');
+    else g.setAttribute('drag', dragBefore);
+
     return { userAgent: navigator.userAgent, checks };
 }
 
