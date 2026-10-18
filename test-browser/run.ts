@@ -23,12 +23,16 @@ interface Driver {
     move(x: number, y: number): Promise<void>;
     down(): Promise<void>;
     up(): Promise<void>;
+    // Playwright only: a key press, as "Alt+Shift+ArrowRight".
+    key?(key: string): Promise<void>;
     close(): Promise<void>;
 }
 
 async function playwright(name: string, url: string, mode: string): Promise<Driver> {
     const pw = (await import('playwright')) as any;
-    const browser = await pw[name].launch();
+    // AX_BROWSER_PATH points the run at a system build instead.
+    const executablePath = process.env.AX_BROWSER_PATH;
+    const browser = await pw[name].launch(executablePath ? { executablePath } : {});
     const page = await browser.newPage({ viewport: { width: 700, height: 900 } });
     if (mode === 'reduced-motion') await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(url);
@@ -37,6 +41,7 @@ async function playwright(name: string, url: string, mode: string): Promise<Driv
         move: (x, y) => page.mouse.move(x, y),
         down: () => page.mouse.down(),
         up: () => page.mouse.up(),
+        key: (key) => page.keyboard.press(key),
         close: () => browser.close(),
     };
 }
@@ -81,6 +86,12 @@ async function drive(d: Driver) {
                 await d.down();
             } else if (state.step === 'release') {
                 await d.up();
+            } else if (state.step === 'probe') {
+                // Keys are for Playwright only; the page leaves its keyboard checks out without them.
+                await d.eval(`(window.__keys = ${d.key ? 'true' : 'false'})`);
+            } else if (/^\d+:/.test(state.step)) {
+                // "n:key|key": the keys in turn.
+                if (d.key) for (const key of state.step.slice(state.step.indexOf(':') + 1).split('|')) await d.key(key);
             }
             await d.eval(`(window.__ack = ${JSON.stringify(state.step)})`);
         }
