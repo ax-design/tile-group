@@ -93,7 +93,7 @@ All events are fired on the tile and bubble.
 
 ## Keyboard
 
-With `drag` set (`press`, `hold` or `cross-slide`), Alt+Shift+Arrow moves the focused tile, as the Start menu of Windows does: each press moves it to the next place in that direction, and holding the keys keeps it moving. The focus stays on the tile's content. Arrow keys in a field inside a tile are left to the field. With `direction: rtl` the left and right keys swap. The keys move tiles only; they do not move the focus from tile to tile.
+With `drag` set (`press`, `hold` or `cross-slide`), Alt+Shift+Arrow moves the focused tile, as the Start menu of Windows does: each press moves it to the next place in that direction, and holding the keys keeps it moving. The focus stays on the tile's content. Arrow keys in a field inside a tile are left to the field. The keys follow the screen: the layout is not mirrored with `direction: rtl`, so ArrowRight moves a tile to the right there too. The keys move tiles only; they do not move the focus from tile to tile.
 
 ## Moving tiles from the page
 

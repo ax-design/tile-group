@@ -682,7 +682,7 @@ export class AxTileGroup extends HTMLElement {
     // same in every engine; key repeat keeps moving the tile.
     private onKeyMove = (event: KeyboardEvent) => {
         if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
-        let direction = directionOf(event.key);
+        const direction = directionOf(event.key);
         if (!direction) return;
         // Off unless the tiles can be dragged, and not while a gesture is going on. A nested group
         // has handled the key already (defaultPrevented), so only the innermost group moves.
@@ -692,8 +692,8 @@ export class AxTileGroup extends HTMLElement {
         if (!target || isEditable(target)) return;
         const tile = this.tileOf(event);
         if (!tile) return;
-        // The layout is not mirrored by direction, so the keys of a right-to-left group swap.
-        if (!this.vertical && getComputedStyle(this).direction === 'rtl') direction = mirrored(direction);
+        // The layout is the same in both writing directions, so the keys follow the screen: right
+        // moves a tile to the right in a right-to-left page too.
         event.preventDefault();
         const from = this.tiles.indexOf(tile);
         const to = keyboardTarget(this.tiles.map(tileSpan), from, direction, this.layoutOptions());
@@ -919,10 +919,6 @@ function directionOf(key: string): Direction | null {
     }
 }
 
-// Right-to-left groups swap the horizontal keys: their reading order runs from the right.
-function mirrored(direction: Direction): Direction {
-    return direction === 'left' ? 'right' : direction === 'right' ? 'left' : direction;
-}
 
 // The arrows of a field are for the field.
 function isEditable(el: HTMLElement): boolean {

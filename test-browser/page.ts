@@ -414,14 +414,17 @@ async function run() {
         check('keyboard: the focus stays after a cancelled move', document.activeElement === byId('k2a'), document.activeElement ? document.activeElement.id : 'none');
         await wait(600);
 
-        // Right-to-left: the keys swap, so ArrowRight moves the tile back.
+        // Right-to-left: the layout is not mirrored, so the keys follow the screen and ArrowRight
+        // still moves the tile to the right.
         const r = byId('r') as AxTileGroup;
         record(r);
-        focusOn('r2a');
+        focusOn('r1a');
         events.length = 0;
+        const leftBefore = byId('r1').getBoundingClientRect().left;
         await press('Alt+Shift+ArrowRight');
         await wait(700);
-        check('rtl: ArrowRight moves the tile the other way', ids(r) === 'r2r1r3r4' && events.join(' ') === 'tilereorder:r2:{"from":1,"to":0,"reason":"keyboard"}', `${ids(r)} ${events.join(' ')}`);
+        const leftAfter = byId('r1').getBoundingClientRect().left;
+        check('rtl: ArrowRight moves the tile to the right on screen', leftAfter > leftBefore && events.length === 1 && events[0].indexOf('"reason":"keyboard"') > 0, `${leftBefore} -> ${leftAfter} ${ids(r)} ${events.join(' ')}`);
         await wait(300);
     }
 
