@@ -79,6 +79,8 @@ const STYLE = `
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 :host([drag="press"]) ::slotted(*) { touch-action: none; }
 :host([drag="cross-slide"]) ::slotted(*) { touch-action: pan-x pinch-zoom; }
+/* The live region of the announcements: read out, never shown. */
+.announce { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 `;
 
 interface Metrics {
@@ -144,6 +146,12 @@ export class AxTileGroup extends HTMLElement {
     // Whether the inline width and height are set by the group.
     private ownWidth = false;
     private ownHeight = false;
+    private live: HTMLElement | null = null;
+    private announceTimer = 0;
+
+    // The words said after a move, for screen readers: position is 1-based, count the tiles. Assign
+    // a function to say them in another language.
+    describeMove: DescribeMove = describeMoved;
 
     constructor() {
         super();
@@ -167,6 +175,14 @@ export class AxTileGroup extends HTMLElement {
                 if (this.isAuto() && this.acrossForSize() !== this.autoAcross) this.schedule(true);
             });
             this.resizeObserver.observe(this);
+        }
+        // Created once, and in place before any text goes into it: a live region must exist to be read.
+        if (!this.live) {
+            this.live = document.createElement('div');
+            this.live.className = 'announce';
+            this.live.setAttribute('role', 'status');
+            this.live.setAttribute('aria-live', 'polite');
+            this.root.appendChild(this.live);
         }
         services().triggers.add(this, this.styleTarget);
         this.layout(false);
@@ -607,6 +623,7 @@ export class AxTileGroup extends HTMLElement {
         const order = moveIndex(this.tiles, from, to);
         if (to !== from) {
             this.moveNode(tile, order[to + 1] || null);
+            this.announceMove(tile, to + 1);
             this.reveal(tile, settle.duration);
         }
         this.applyLayout(order, this.layoutOf(order), { animate: true, scale: 1, duration: settle.duration, together: settle.together });
@@ -627,6 +644,19 @@ export class AxTileGroup extends HTMLElement {
         }
         // Our own change of the children: no layout pass from the observer.
         if (this.mutationObserver) this.mutationObserver.takeRecords();
+    }
+
+    // Says where a moved tile is. The region is emptied at once and written after 150 ms, so a run of
+    // moves says only the last place, and the same place twice is said twice.
+    private announceMove(tile: HTMLElement, position: number) {
+        const live = this.live;
+        if (!live) return;
+        window.clearTimeout(this.announceTimer);
+        live.textContent = '';
+        if (this.getAttribute('announce') === 'off') return;
+        this.announceTimer = window.setTimeout(() => {
+            live.textContent = this.describeMove(tile, position, this.tiles.length);
+        }, 150);
     }
 
     // Scrolls a moved tile into view once it has settled, if it sticks out of the viewport or of
@@ -848,6 +878,25 @@ function suppressNextClick() {
     };
     window.addEventListener('click', stop, true);
     window.setTimeout(() => window.removeEventListener('click', stop, true), 400);
+}
+
+export type DescribeMove = (tile: Element, position: number, count: number) => string;
+
+function describeMoved(tile: Element, position: number, count: number): string {
+    return `${labelOf(tile)}, moved to position ${position} of ${count}`;
+}
+
+// What a tile is called: its aria-label, else the one of the first element in it that has one, else
+// its text.
+function labelOf(tile: Element): string {
+    const own = (tile.getAttribute('aria-label') || '').trim();
+    if (own) return own;
+    const inner = tile.querySelectorAll('[aria-label]');
+    for (let i = 0; i < inner.length; i++) {
+        const label = (inner[i].getAttribute('aria-label') || '').trim();
+        if (label) return label;
+    }
+    return (tile.textContent || '').trim();
 }
 
 // The direction of an arrow key, or null for any other key. The legacy names are those of old Edge.
