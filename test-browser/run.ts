@@ -26,10 +26,11 @@ interface Driver {
     close(): Promise<void>;
 }
 
-async function playwright(name: string, url: string): Promise<Driver> {
+async function playwright(name: string, url: string, mode: string): Promise<Driver> {
     const pw = (await import('playwright')) as any;
     const browser = await pw[name].launch();
     const page = await browser.newPage({ viewport: { width: 700, height: 900 } });
+    if (mode === 'reduced-motion') await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(url);
     return {
         eval: (script) => page.evaluate(script),
@@ -89,9 +90,11 @@ async function drive(d: Driver) {
 
 let failed = 0;
 for (const name of process.argv.slice(2).length ? process.argv.slice(2) : ['chromium']) {
-    for (const mode of ['default']) {
+    for (const mode of ['default', 'reduced-motion']) {
+        // WebDriver for Safari cannot emulate the media setting.
+        if (name === 'safari' && mode !== 'default') continue;
         const url = `http://127.0.0.1:${server.port}/`;
-        const d = name === 'safari' ? await safari(url) : await playwright(name, url);
+        const d = name === 'safari' ? await safari(url) : await playwright(name, url, mode);
         let result: any;
         try {
             result = await drive(d);

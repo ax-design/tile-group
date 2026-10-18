@@ -136,7 +136,11 @@ async function run() {
     const preview = cellsOf(g);
     // B moves to the front, A's place.
     check('the others make room while dragging', JSON.stringify(preview[1]) === JSON.stringify([0, 0]) && /scale\(0\.95\)/.test(byId('b').style.transform), JSON.stringify(preview));
+    // With reduced motion (the mode of the second run) the drop lands at once, in the same call.
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     pointer('pointerup', start.x + 2 * STEP, start.y);
+    if (reduced)
+        check('reduced motion: the drop lands the tiles at once', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)) && a.style.opacity === '' && !/scale/.test(a.style.transform), JSON.stringify(cellsOf(g)));
     let clicked = false;
     a.addEventListener('click', () => (clicked = true), { once: true });
     a.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -341,7 +345,8 @@ async function run() {
     pointer('pointermove', from.x, from.y);
     pointer('pointerup', from.x, from.y);
     await wait(100);
-    check('an opaque dropped tile stays above the others while it lands', glass.style.zIndex === '1', glass.style.zIndex);
+    // Under reduced motion the landing takes no time: the tile is back among the others at once.
+    check('an opaque dropped tile stays above the others while it lands', glass.style.zIndex === (reduced ? '' : '1'), glass.style.zIndex);
     await wait(600);
     check('and goes back among them once it has landed', glass.style.zIndex === '', glass.style.zIndex);
     glass.style.removeProperty('--tile-drag-opacity');

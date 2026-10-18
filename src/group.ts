@@ -34,7 +34,8 @@
 // The motion is the one of WinJS (Microsoft's controls for Windows 8 apps): tiles move to new
 // places in 367 ms, one after another 33 ms apart (at most 250 ms); a dragged tile grows to 1.05
 // and fades to 0.65 in 240 ms while the others shrink to 0.95, and everything settles in 500 ms
-// on drop; all on cubic-bezier(0.1, 0.9, 0.2, 1).
+// on drop; all on cubic-bezier(0.1, 0.9, 0.2, 1). With prefers-reduced-motion: reduce the same
+// end states are set at once, with no motion (as Windows does with "Show animations" off).
 import { services } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
 import { layoutTiles } from './layout.js';
@@ -364,7 +365,8 @@ export class AxTileGroup extends HTMLElement {
         if (before && before.animation) before.animation.cancel();
         tile.style.transform = to;
         let animation: Motion | null = null;
-        if (animate && before) {
+        // Read when the move starts, so a change of the setting applies to the next one.
+        if (animate && before && !reducedMotion()) {
             const delay = Math.min(STAGGER_CAP_MS, staggerIndex * STAGGER_MS);
             animation = new ScriptedMove(tile, from, to, duration, delay);
         }
@@ -724,6 +726,12 @@ function dragOpacity(tile: HTMLElement): number {
     return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : DRAG_OPACITY;
 }
 
+// The user's wish for less motion: the "Show animations" setting of Windows. Moves and fades then
+// end at once.
+function reducedMotion(): boolean {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 // The fade running on each tile, so a new one stops it.
 const fades = new WeakMap<HTMLElement, number>();
 
@@ -733,10 +741,11 @@ function fadeTo(tile: HTMLElement, opacity: number, duration: number, done?: () 
     fades.delete(tile);
     const from = parseFloat(getComputedStyle(tile).opacity);
     const end = opacity === 1 ? '' : String(opacity);
-    if (from === opacity) {
+    const reduced = reducedMotion();
+    if (from === opacity || reduced) {
         tile.style.opacity = end;
         // The same moment as a fade: a dropped tile stays above the others until it has landed.
-        if (done) window.setTimeout(done, duration);
+        if (done) window.setTimeout(done, reduced ? 0 : duration);
         return;
     }
     const start = performance.now();
