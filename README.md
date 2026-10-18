@@ -78,14 +78,38 @@ In a vertical group, strips are rows: `2` (the default there) fills rows one med
 
 Reserved for dragging tiles onto each other to form groups. It fires no events yet.
 
+### announce
+
+`off` turns off the announcements of moves (see [Announcements](#announcements)). Any other value, or none, keeps them on.
+
 ## Events
 
 All events are fired on the tile and bubble.
 
 * `tiledragstart`: a drag starts. Cancel it to keep the tile in place.
-* `tilereorder`: a tile was dropped at a new place, `detail` is `{ from, to }`. Cancel it to put the tile back.
+* `tilereorder`: a tile moved to a new place, `detail` is `{ from, to, reason }`. Cancel it to keep the tile in place. `reason` is `pointer` (a drop), `keyboard` (Alt+Shift+Arrow) or `api` (`moveTile()`).
 * `tiledragend`: the drag is over, `detail` is `{ from, to }` (equal when nothing moved).
 * `tilecontextmenu`: `detail` is `{ clientX, clientY, pointerType }`; `pointerType` is `mouse`, `touch`, `pen` or `keyboard`.
+
+## Keyboard
+
+With `drag` set (`press`, `hold` or `cross-slide`), Alt+Shift+Arrow moves the focused tile, as the Start menu of Windows does: each press moves it to the next place in that direction, and holding the keys keeps it moving. The focus stays on the tile's content. Arrow keys in a field inside a tile are left to the field. With `direction: rtl` the left and right keys swap. The keys move tiles only; they do not move the focus from tile to tile.
+
+## Moving tiles from the page
+
+`moveTile(tile, to)` moves a tile to the index `to` (the `to` of `tilereorder`), animated, and returns `true`. It works with any `drag` setting. It returns `false`, and fires nothing, when `tile` is not a tile of the group, `to` is out of range or the tile would stay where it is; it also returns `false` when a listener cancels the `tilereorder` it fires (with `reason` `api`).
+
+A single-pointer "Move" command can be offered this way: listen to `tilecontextmenu`, show a menu with a Move item, and call `moveTile()` with the place the user picks.
+
+## Announcements
+
+After every move, by the keyboard, by a drop or by `moveTile()`, the group writes where the tile is into a visually hidden live region (`role="status"`), such as "Mail, moved to position 2 of 6". The label is the tile's `aria-label`, else the `aria-label` of an element inside it, else its text. Moves in a run are announced once, the last place. `announce="off"` turns this off.
+
+To word it in another language, assign `describeMove`. It is called with the tile, the 1-based position and the number of tiles:
+
+```javascript
+group.describeMove = (tile, position, count) => `${tile.dataset.name}, Position ${position} von ${count}`;
+```
 
 ## Style Controlling
 
