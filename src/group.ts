@@ -27,9 +27,11 @@
 //   contextmenu     a right click, the context menu key, and a touch or pen press held for
 //                   hold-delay ms and released without moving fire one event: tilecontextmenu
 //   grouping        reserved for dragging tiles onto each other; no events yet
+//   Alt+Shift+arrows  moves the focused tile, as the Start menu of Windows does (needs drag)
 //
 // Events (on the tile, bubbling): tiledragstart (cancelable), tiledragend, tilereorder
-// (cancelable, detail { from, to }), tilecontextmenu (detail { clientX, clientY, pointerType }).
+// (cancelable, detail { from, to, reason }, reason being pointer, keyboard or api), tilecontextmenu
+// (detail { clientX, clientY, pointerType }).
 //
 // The motion is the one of WinJS (Microsoft's controls for Windows 8 apps): tiles move to new
 // places in 367 ms, one after another 33 ms apart (at most 250 ms); a dragged tile grows to 1.05
@@ -40,7 +42,8 @@ import { services } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
 import { layoutTiles } from './layout.js';
 import type { LayoutResult } from './layout.js';
-import { dropTarget, moveIndex } from './reorder.js';
+import { dropTarget, keyboardTarget, moveIndex } from './reorder.js';
+import type { Direction } from './reorder.js';
 import { tileSpan } from './tile.js';
 
 const REPOSITION_MS = 367;
@@ -57,6 +60,15 @@ const DEFAULT_HOLD_MS = 500;
 const DEFAULT_STRIP = 4;
 const DEFAULT_STRIP_VERTICAL = 2;
 const DEFAULT_COLUMNS = 6;
+
+type ReorderReason = 'pointer' | 'keyboard' | 'api';
+// How a reorder lays the tiles out: a drop settles them all at once, a move goes one by one.
+interface Settle {
+    duration: number;
+    together: boolean;
+}
+const MOVE_SETTLE: Settle = { duration: REPOSITION_MS, together: false };
+const DROP_SETTLE: Settle = { duration: DROP_MS, together: true };
 
 const STYLE = `
 /* Tiles tilt when pressed, like the tiles of Windows. The other tilt properties keep the
@@ -144,6 +156,7 @@ export class AxTileGroup extends HTMLElement {
         this.addEventListener('contextmenu', this.onContextMenu);
         // Not passive: a held or dragged touch must not scroll the page.
         this.addEventListener('touchmove', this.onTouchMove, { passive: false } as AddEventListenerOptions);
+        this.addEventListener('keydown', this.onKeyMove);
         if (typeof MutationObserver !== 'undefined') {
             this.mutationObserver = new MutationObserver(() => this.schedule(true));
             this.mutationObserver.observe(this, { childList: true });
@@ -183,6 +196,7 @@ export class AxTileGroup extends HTMLElement {
         this.removeEventListener('pointerdown', this.onPointerDown);
         this.removeEventListener('contextmenu', this.onContextMenu);
         this.removeEventListener('touchmove', this.onTouchMove);
+        this.removeEventListener('keydown', this.onKeyMove);
         if (this.mutationObserver) this.mutationObserver.disconnect();
         if (this.resizeObserver) this.resizeObserver.disconnect();
         this.mutationObserver = this.resizeObserver = null;
@@ -350,13 +364,13 @@ export class AxTileGroup extends HTMLElement {
             if (ts.width !== width) ts.width = width;
             if (ts.height !== height) ts.height = height;
             if (tile === options.skip) return;
-            if (this.moveTile(tile, p.column * stepX, p.row * stepY, options.scale, options.animate, options.together ? 0 : moved, options.duration || REPOSITION_MS)) moved++;
+            if (this.place(tile, p.column * stepX, p.row * stepY, options.scale, options.animate, options.together ? 0 : moved, options.duration || REPOSITION_MS)) moved++;
         });
         for (const tile of Array.from(this.shown.keys())) if (tile.parentElement !== this) this.shown.delete(tile);
     }
 
     // Moves a tile to (x, y) at a scale. Returns true when it animates, for the stagger.
-    private moveTile(tile: HTMLElement, x: number, y: number, scale: number, animate: boolean, staggerIndex: number, duration: number): boolean {
+    private place(tile: HTMLElement, x: number, y: number, scale: number, animate: boolean, staggerIndex: number, duration: number): boolean {
         const before = this.shown.get(tile);
         const to = transformOf(x, y, scale);
         if (before && before.x === x && before.y === y && before.scale === scale) return false;
@@ -517,13 +531,13 @@ export class AxTileGroup extends HTMLElement {
         const release = (g.tile as HTMLElement & { release?: () => void }).release;
         if (typeof release === 'function') release.call(g.tile);
         const shown = this.shown.get(g.tile);
-        if (shown) this.moveTile(g.tile, shown.x, shown.y, DRAG_SCALE, true, 0, LIFT_MS);
+        if (shown) this.place(g.tile, shown.x, shown.y, DRAG_SCALE, true, 0, LIFT_MS);
         g.tile.style.zIndex = '1';
         fadeTo(g.tile, dragOpacity(g.tile), LIFT_MS);
         for (const tile of this.tiles) {
             if (tile === g.tile) continue;
             const s = this.shown.get(tile);
-            if (s) this.moveTile(tile, s.x, s.y, OTHERS_SCALE, true, 0, LIFT_MS);
+            if (s) this.place(tile, s.x, s.y, OTHERS_SCALE, true, 0, LIFT_MS);
         }
     }
 
@@ -570,30 +584,91 @@ export class AxTileGroup extends HTMLElement {
         const g = this.gesture!;
         if (g.frame) cancelAnimationFrame(g.frame);
         g.frame = 0;
-        let to = cancel ? g.from : g.to;
-        if (!cancel && to !== g.from) {
-            const reorder = new CustomEvent('tilereorder', { bubbles: true, composed: true, cancelable: true, detail: { from: g.from, to } });
-            if (!g.tile.dispatchEvent(reorder)) to = g.from;
-        }
-        const order = moveIndex(g.order, g.from, to);
-        if (to !== g.from) {
-            // Our own change of the children: no layout pass from the observer.
-            const next = order[to + 1] || null;
-            this.insertBefore(g.tile, next);
-            if (this.mutationObserver) this.mutationObserver.takeRecords();
-        }
         const tile = g.tile;
         this.gesture = null;
         this.removeListeners(g);
         // The pointerup of a drag is followed by a click on the tile.
         suppressNextClick();
-        // Everything settles: the dragged tile into its place, the others back to full size.
-        this.applyLayout(order, this.layoutOf(order), { animate: true, scale: 1, duration: DROP_MS, together: true });
+        const to = this.reorder(tile, g.from, cancel ? g.from : g.to, 'pointer', DROP_SETTLE);
         fadeTo(tile, 1, DROP_MS, () => {
             if (!this.gesture || this.gesture.tile !== tile) tile.style.zIndex = '';
         });
         tile.dispatchEvent(new CustomEvent('tiledragend', { bubbles: true, composed: true, detail: { from: g.from, to } }));
     }
+
+    // The one move of a tile, for a drag, the keyboard and moveTile(). Fires the cancelable
+    // tilereorder (not when `to` is `from`), moves the tile unless a listener canceled it, and
+    // lays the tiles out again. Returns the index the tile ends at.
+    private reorder(tile: HTMLElement, from: number, to: number, reason: ReorderReason, settle: Settle): number {
+        if (to !== from) {
+            const event = new CustomEvent('tilereorder', { bubbles: true, composed: true, cancelable: true, detail: { from, to, reason } });
+            if (!tile.dispatchEvent(event)) to = from;
+        }
+        const order = moveIndex(this.tiles, from, to);
+        if (to !== from) {
+            this.moveNode(tile, order[to + 1] || null);
+            this.reveal(tile, settle.duration);
+        }
+        this.applyLayout(order, this.layoutOf(order), { animate: true, scale: 1, duration: settle.duration, together: settle.together });
+        return to;
+    }
+
+    // Moves the tile in front of `next` (null: to the end). moveBefore (Chromium 133) keeps the
+    // focus where it is; insertBefore takes it away from a focused element of the tile, which is
+    // focused again here.
+    private moveNode(tile: HTMLElement, next: HTMLElement | null) {
+        const self = this as HTMLElement & { moveBefore?: (node: Node, child: Node | null) => void };
+        if (typeof self.moveBefore === 'function') self.moveBefore(tile, next);
+        else {
+            const focused = deepActiveElement();
+            this.insertBefore(tile, next);
+            // focus() takes preventScroll where it is supported; older engines scroll to it.
+            if (focused && within(focused, tile)) focused.focus({ preventScroll: true });
+        }
+        // Our own change of the children: no layout pass from the observer.
+        if (this.mutationObserver) this.mutationObserver.takeRecords();
+    }
+
+    // Scrolls a moved tile into view once it has settled, if it sticks out of the viewport or of
+    // a scroll container around it. Under reduced motion it has settled at once.
+    private reveal(tile: HTMLElement, duration: number) {
+        const check = () => {
+            if (clipped(tile)) tile.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        };
+        if (reducedMotion()) check();
+        else window.setTimeout(check, duration);
+    }
+
+    // Moves a tile to the index `to` of the order (the `to` of tilereorder), animated. Returns
+    // false, and fires nothing, when the tile is not one of the group's tiles, `to` is out of
+    // range or nothing would change. Works with drag="none" too: the tile is moved by the page.
+    moveTile(tile: Element, to: number): boolean {
+        const from = this.tiles.indexOf(tile as HTMLElement);
+        if (from < 0 || !Number.isInteger(to) || to < 0 || to >= this.tiles.length || to === from) return false;
+        return this.reorder(tile as HTMLElement, from, to, 'api', MOVE_SETTLE) !== from;
+    }
+
+    // Alt+Shift+arrows move the focused tile, as the Start menu of Windows does. Keys are the
+    // same in every engine; key repeat keeps moving the tile.
+    private onKeyMove = (event: KeyboardEvent) => {
+        if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+        let direction = directionOf(event.key);
+        if (!direction) return;
+        // Off unless the tiles can be dragged, and not while a gesture is going on. A nested group
+        // has handled the key already (defaultPrevented), so only the innermost group moves.
+        if (this.dragMode === 'none' || this.gesture) return;
+        // Typing keeps its keys: the arrows of a field in a tile are not for the tile.
+        const target = (typeof event.composedPath === 'function' ? event.composedPath()[0] : event.target) as HTMLElement | null;
+        if (!target || isEditable(target)) return;
+        const tile = this.tileOf(event);
+        if (!tile) return;
+        // The layout is not mirrored by direction, so the keys of a right-to-left group swap.
+        if (!this.vertical && getComputedStyle(this).direction === 'rtl') direction = mirrored(direction);
+        event.preventDefault();
+        const from = this.tiles.indexOf(tile);
+        const to = keyboardTarget(this.tiles.map(tileSpan), from, direction, this.layoutOptions());
+        if (to !== from) this.reorder(tile, from, to, 'keyboard', MOVE_SETTLE);
+    };
 
     private endGesture() {
         const g = this.gesture;
@@ -604,7 +679,7 @@ export class AxTileGroup extends HTMLElement {
             // Lifted but not dragged: back to normal.
             for (const tile of this.tiles) {
                 const s = this.shown.get(tile);
-                if (s) this.moveTile(tile, s.x, s.y, 1, true, 0, DROP_MS);
+                if (s) this.place(tile, s.x, s.y, 1, true, 0, DROP_MS);
             }
             fadeTo(g.tile, 1, DROP_MS, () => (g.tile.style.zIndex = ''));
         }
@@ -773,4 +848,66 @@ function suppressNextClick() {
     };
     window.addEventListener('click', stop, true);
     window.setTimeout(() => window.removeEventListener('click', stop, true), 400);
+}
+
+// The direction of an arrow key, or null for any other key. The legacy names are those of old Edge.
+function directionOf(key: string): Direction | null {
+    switch (key) {
+        case 'ArrowLeft':
+        case 'Left':
+            return 'left';
+        case 'ArrowRight':
+        case 'Right':
+            return 'right';
+        case 'ArrowUp':
+        case 'Up':
+            return 'up';
+        case 'ArrowDown':
+        case 'Down':
+            return 'down';
+        default:
+            return null;
+    }
+}
+
+// Right-to-left groups swap the horizontal keys: their reading order runs from the right.
+function mirrored(direction: Direction): Direction {
+    return direction === 'left' ? 'right' : direction === 'right' ? 'left' : direction;
+}
+
+// The arrows of a field are for the field.
+function isEditable(el: HTMLElement): boolean {
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+}
+
+// The focused element, also inside the shadow root of a component that has it.
+function deepActiveElement(): HTMLElement | null {
+    let el = document.activeElement as HTMLElement | null;
+    while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement as HTMLElement;
+    return el;
+}
+
+// Whether `node` is `root` or inside it, through shadow roots.
+function within(node: Node, root: Node): boolean {
+    for (let n: Node | null = node; n; n = n.parentNode || (n as ShadowRoot).host || null) if (n === root) return true;
+    return false;
+}
+
+// Whether the tile sticks out of the viewport or of a scroll container around it.
+function clipped(tile: HTMLElement): boolean {
+    const r = tile.getBoundingClientRect();
+    let left = 0;
+    let top = 0;
+    let right = window.innerWidth;
+    let bottom = window.innerHeight;
+    for (let el = tile.parentElement; el; el = el.parentElement) {
+        const style = getComputedStyle(el);
+        if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+        const b = el.getBoundingClientRect();
+        left = Math.max(left, b.left);
+        top = Math.max(top, b.top);
+        right = Math.min(right, b.right);
+        bottom = Math.min(bottom, b.bottom);
+    }
+    return r.left < left || r.top < top || r.right > right || r.bottom > bottom;
 }
