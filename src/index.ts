@@ -10,8 +10,8 @@ export { AxTileGroup } from './group.js';
 export { AxTile, tileSpan } from './tile.js';
 export { layoutTiles } from './layout.js';
 export type { LayoutOptions, LayoutResult, Placement, TileSpan } from './layout.js';
-export { dropTarget, moveIndex } from './reorder.js';
-export type { DropOptions, DropTarget } from './reorder.js';
+export { dropTarget, keyboardTarget, moveIndex } from './reorder.js';
+export type { Direction, DropOptions, DropTarget } from './reorder.js';
 
 const length = (name: string, initial: string): PropertySpec => ({ name, syntax: { type: 'length' }, initial, inherits: true, register: true });
 
