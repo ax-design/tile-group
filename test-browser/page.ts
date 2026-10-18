@@ -505,6 +505,16 @@ async function run() {
             await wait(600);
             k.describeMove = describe;
             check('a custom describeMove is used', said(k) === 'k1 at 1/4', said(k));
+
+            // The region is emptied at once, and written only after the debounce (150 ms): still
+            // empty after 60 ms, with the place after the wait. A key event made in the page.
+            (byId('k2a') as HTMLElement).focus();
+            byId('k2a').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, shiftKey: true, bubbles: true, composed: true, cancelable: true }));
+            const at = said(k);
+            await wait(60);
+            const early = said(k);
+            await wait(400);
+            check('the announcement waits for the debounce', at === '' && early === '' && said(k) === 'Two, moved to position 1 of 4', `"${at}" "${early}" "${said(k)}"`);
         }
 
         // The API moves announce too, and a label is the aria-label of the tile, else of an element in
