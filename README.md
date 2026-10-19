@@ -32,6 +32,8 @@ register();
 
 If you don't use a bundler, load `build/main.js` (it exposes `AxTileGroup`) or import `build/index.mjs`.
 
+`<ax-tile>` is not in this package. It comes from `@ax-design/tile`, which defines it: register that package as well.
+
 ## Usage
 
 ```html
@@ -42,9 +44,9 @@ If you don't use a bundler, load `build/main.js` (it exposes `AxTileGroup`) or i
 </ax-tile-group>
 ```
 
-`ax-tile` is an [`ax-surface`](https://github.com/ax-design/surface), so the layers, shapes and tilt of Surface work on it. `columns` and `rows` give its size in cells; change them and the other tiles move. Any other element in the group is a tile too, two by two cells unless it has the attributes.
+A child of the group can be any element, and each one is a tile. The recommended child is `<ax-tile>` from `@ax-design/tile`, an [`ax-surface`](https://github.com/ax-design/surface) with the layers, shapes and tilt of Surface. Its `columns` and `rows` give its size in cells. A child without the attributes is two by two cells. Change the `columns` or `rows` of any child and the group lays the tiles out again.
 
-Tiles look and move like the tiles of Windows out of the box: they tilt when pressed (the group sets `--ax-tilt-mode: absolute`, inherited, with the tilt of the original `ax-pressure`), and `ax-tile` has a 2px border for the reveal light. Any style of yours wins over both.
+Tiles look and move like the tiles of Windows out of the box: the group sets `--ax-tilt-mode: absolute`, inherited, so tiles tilt when pressed with the tilt of the original `ax-pressure`. The other defaults of a tile, such as the 2px border for the reveal light of `<ax-tile>`, come from `@ax-design/tile`. Any style of yours wins over both.
 
 The order of the children is the order of the tiles. Tiles fill the group from the top left: each one takes the first free place after the tile before it, so a tile never jumps in front of an earlier one, and the group grows to the right.
 
@@ -169,6 +171,7 @@ Tiles move and fade by script, frame by frame, in every engine, not with the Web
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
 * 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves. A dropped tile stays above the others until it has landed, also when its opacity does not change. Tiles move and fade by script in every engine, so acrylic in them stays drawn.
+* Unreleased: `<ax-tile>` moved to `@ax-design/tile`. tile-group no longer defines `<ax-tile>` and exports no `AxTile`: register `@ax-design/tile` for it. `register()` now defines only `<ax-tile-group>`, not `<ax-surface>`; register `@ax-design/surface` yourself if your page needs it. The group observes the `columns` and `rows` of its children itself, so any child can change its size. `tileChanged()` is deprecated; it still lays the group out.
 
 ## Development
 
