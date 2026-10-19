@@ -1,7 +1,14 @@
 // Browser checks for <ax-tile-group>. Gestures are synthetic pointer events, so every engine
 // (and Safari through WebDriver) runs the same steps.
+import { AxSurface, register as registerSurface } from '@ax-design/surface';
+import * as pkg from '../src/index.js';
 import { layoutTiles, register } from '../src/index.js';
 import type { AxTileGroup } from '../src/index.js';
+
+// The <ax-tile> of these checks: a surface and nothing else. The real one is @ax-design/tile.
+class AxTileFixture extends AxSurface {
+    static readonly ElementName: string = 'ax-tile';
+}
 
 interface Check {
     name: string;
@@ -67,7 +74,12 @@ const record = (group: HTMLElement) => {
 };
 
 async function run() {
+    // The group is registered first, so the check sees whether the package defines <ax-tile>.
+    registerSurface();
     register();
+    const definedByPackage = customElements.get('ax-tile') !== undefined;
+    customElements.define('ax-tile', AxTileFixture);
+    check('register() leaves <ax-tile> to @ax-design/tile', !definedByPackage && !('AxTile' in pkg) && customElements.get('ax-tile') === AxTileFixture, String(definedByPackage));
     await frames(4);
     const g = byId('g') as AxTileGroup;
     record(g);
@@ -78,17 +90,16 @@ async function run() {
     check('tile sizes follow columns and rows', byId('e').style.width === '172px' && byId('e').style.height === '84px' && byId('f').style.width === '40px', byId('e').style.width);
     check('group size fits the tiles', g.style.height === '172px' && g.style.width === `${(Math.max(...expectedCells(g).map((c, i) => c[0] + [2, 2, 2, 2, 4, 1][i]))) * STEP - 4}px`, `${g.style.width} x ${g.style.height}`);
 
-    // 1a. Tile defaults: pressed tilt and a 2 px border, both below any author style.
+    // 1a. The group's pressed tilt, below any author style. (The border of a tile is a default of
+    // @ax-design/tile, not of the group.)
     {
-        const tile = byId('c') as HTMLElement & { debugState: { values: { keyword(n: string): string; length(n: string): number } } };
+        const tile = byId('c') as HTMLElement & { debugState: { values: { keyword(n: string): string } } };
         const v = () => tile.debugState.values;
-        check('tiles tilt and have a 2px border by default', v().keyword('--ax-tilt-mode') === 'absolute' && v().length('--ax-border-width') === 2, `${v().keyword('--ax-tilt-mode')} ${v().length('--ax-border-width')}`);
+        check('tiles tilt when pressed by default', v().keyword('--ax-tilt-mode') === 'absolute', v().keyword('--ax-tilt-mode'));
         g.style.setProperty('--ax-tilt-mode', 'off');
-        tile.style.setProperty('--ax-border-width', '0px');
         await frames(4);
-        check('author styles override the tile defaults', v().keyword('--ax-tilt-mode') === 'off' && v().length('--ax-border-width') === 0, `${v().keyword('--ax-tilt-mode')} ${v().length('--ax-border-width')}`);
+        check('author styles override the tile defaults', v().keyword('--ax-tilt-mode') === 'off', v().keyword('--ax-tilt-mode'));
         g.style.removeProperty('--ax-tilt-mode');
-        tile.style.removeProperty('--ax-border-width');
         await frames(4);
     }
 
@@ -123,6 +134,34 @@ async function run() {
     byId('b').setAttribute('columns', '2');
     await frames(3);
     await wait(700);
+
+    // 2b. A child changing its columns lays the group out again, an <ax-tile> and a plain <div>
+    // alike. The group watches the children itself: no call from the tile.
+    {
+        const cg = byId('cg') as AxTileGroup;
+        const resting = cellsOf(cg);
+        // The first and the third child widen into places that move the others (the second would not).
+        for (const id of ['cg1', 'cg3']) {
+            const tile = byId(id);
+            tile.setAttribute('columns', '4');
+            await wait(700);
+            const moved = cellsOf(cg);
+            check(`columns of a ${tile.tagName.toLowerCase()} child lay the group out again`, JSON.stringify(moved) !== JSON.stringify(resting) && JSON.stringify(moved) === JSON.stringify(expectedCells(cg)), JSON.stringify(moved));
+            tile.setAttribute('columns', '2');
+            await wait(700);
+        }
+        // tileChanged() still works: the change is taken out of the observer's queue here, so only
+        // the call can lay the group out.
+        const observer = (cg as unknown as { mutationObserver: MutationObserver }).mutationObserver;
+        byId('cg3').setAttribute('columns', '4');
+        observer.takeRecords();
+        cg.tileChanged();
+        await wait(700);
+        check('tileChanged() lays the group out again', JSON.stringify(cellsOf(cg)) !== JSON.stringify(resting) && JSON.stringify(cellsOf(cg)) === JSON.stringify(expectedCells(cg)), JSON.stringify(cellsOf(cg)));
+        byId('cg3').setAttribute('columns', '2');
+        await wait(700);
+        check('and back to the resting layout', JSON.stringify(cellsOf(cg)) === JSON.stringify(resting), JSON.stringify(cellsOf(cg)));
+    }
 
     // 3. Press drag: the others make room while dragging; the drop reorders the children.
     events.length = 0;

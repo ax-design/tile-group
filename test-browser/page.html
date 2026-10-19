@@ -83,5 +83,12 @@
   <ax-tile id="l2" columns="2" rows="2" layers="fill"><span><a aria-label="Calendar" href="#l2">x</a></span></ax-tile>
   <ax-tile id="l3" columns="2" rows="2" layers="fill">Notes</ax-tile>
 </ax-tile-group>
+<!-- Children that change size: <ax-tile> and a plain <div>, moved by the group (check 2b). -->
+<ax-tile-group id="cg">
+  <div id="cg1" columns="2" rows="2" style="background: #99a">1</div>
+  <ax-tile id="cg2" columns="2" rows="2" layers="fill">2</ax-tile>
+  <ax-tile id="cg3" columns="2" rows="2" layers="fill">3</ax-tile>
+  <div id="cg4" columns="2" rows="2" style="background: #99a">4</div>
+</ax-tile-group>
 <script type="module" src="./page.ts"></script>
 </body></html>
