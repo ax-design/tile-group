@@ -54,7 +54,8 @@ export function readParams(style: CSSStyleDeclaration): Params {
         turnstileDuration: parseTime(value('--tile-turnstile-duration'), 600),
         turnstileEasing: parseEasingOr(value('--tile-turnstile-easing'), TURNSTILE_EASING),
         launchScale: parseNumber(value('--tile-launch-exit-scale'), 0.9),
-        launchDuration: parseTime(value('--tile-launch-exit-duration'), 150),
+        // About 100 ms in a 60 fps recording of Windows 8.1.
+        launchDuration: parseTime(value('--tile-launch-exit-duration'), 100),
     };
 }
 

@@ -764,6 +764,8 @@ export class AxTileGroup extends HTMLElement {
         const cx = window.innerWidth / 2 - rect.left;
         const cy = window.innerHeight / 2 - rect.top;
         this.launch = { source, cx, cy, start: performance.now(), duration, scale: params.launchScale };
+        // The launched tile grows toward the middle of the screen: above the others while it does.
+        if (source) source.style.zIndex = '2';
         this.launchFrame(performance.now());
         this.kick();
     }
@@ -785,6 +787,7 @@ export class AxTileGroup extends HTMLElement {
     }
 
     private endLaunch() {
+        if (this.launch && this.launch.source && (!this.gesture || this.gesture.tile !== this.launch.source)) this.launch.source.style.zIndex = '';
         this.launch = null;
         this.clearLaunch();
     }

@@ -750,10 +750,12 @@ async function run() {
             check('launch: the tiles of another group shrink and fade too', others.length > 0 && others.every((t) => /scale\(0\.9\)/.test(t.style.transform) && getComputedStyle(t).opacity === '0'), others.map((t) => t.style.transform + ' ' + getComputedStyle(t).opacity).join(' | '));
             check('launch: the shrink is about the middle of the screen', !!tr && Math.abs(+tr[1] - wantX) < 0.5 && Math.abs(+tr[2] - wantY) < 0.5, `${e2.style.transform} want ${wantX.toFixed(1)} ${wantY.toFixed(1)}`);
         }
+        check('launch: the launched tile is raised above the others', byId('en1').style.zIndex === '2', byId('en1').style.zIndex);
         check('launch: the launched tile is left alone', motionOf(byId('en1')) === null && !/scale/.test(byId('en1').style.transform), byId('en1').style.transform);
         // The synchronous restore: the others are back at once, and the entrance plays again.
         launched(byId('en1'));
         // Under reduced motion the entrance it starts is at its end at once.
+        check('tilelaunchend puts the launched tile back in line', byId('en1').style.zIndex === '', byId('en1').style.zIndex);
         check('tilelaunchend restores the other groups at once too', Array.from(byId('ep').children).every((t) => !/scale/.test((t as HTMLElement).style.transform)), Array.from(byId('ep').children).map((t) => (t as HTMLElement).style.transform).join(' | '));
         check('tilelaunchend restores the others at once, and plays the entrance', ['en2', 'en3', 'en4'].every((id) => !/scale/.test(byId(id).style.transform)) && opacityOf(byId('en2')) === (reduced ? 1 : 0), ['en2', 'en3', 'en4'].map((id) => byId(id).style.transform + ' ' + opacityOf(byId(id))).join(' | '));
         await wait(1500);

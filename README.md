@@ -202,7 +202,9 @@ Times are `ms` or `s`, lengths are `px`, and invalid values fall back to the def
 When a tile is launched anywhere on the page, the other tiles of every group shrink toward the middle of the screen and fade, as the whole Start screen of Windows does, and the launched tile is left as it is. Each group listens on the document to the bubbling `tilelaunchstart` event of the tile, and to `tilelaunchend`, which restores the tiles at once and plays the entrance again when `--tile-entrance` sets a variant. A listener that cancels `tilelaunchstart` stops the launch. The group does not import `@ax-design/tile`: the events are fired by the launching tile, which is up to you (`@ax-design/tile` fires them).
 
 * `--tile-launch-exit-scale`: the scale of the others, `0.9`.
-* `--tile-launch-exit-duration`: `150ms`.
+* `--tile-launch-exit-duration`: `100ms`, as measured on a recording of Windows 8.1.
+
+The launched tile is raised above the others (`z-index`) until `tilelaunchend`, as `@ax-design/tile` grows it toward the middle of the screen.
 
 ## Start screen
 
