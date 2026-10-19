@@ -182,7 +182,12 @@ interface Run {
 }
 
 interface Launch {
-    source: HTMLElement;
+    // The launched tile when it is a child of this group; null when it is elsewhere on the page.
+    source: HTMLElement | null;
+    // The middle of the viewport in the group's px, read at the start: every group of the page
+    // shrinks toward it, as the whole Start screen of Windows does.
+    cx: number;
+    cy: number;
     start: number;
     duration: number;
     scale: number;
@@ -254,8 +259,10 @@ export class AxTileGroup extends HTMLElement {
         // Not passive: a held or dragged touch must not scroll the page.
         this.addEventListener('touchmove', this.onTouchMove, { passive: false } as AddEventListenerOptions);
         this.addEventListener('keydown', this.onKeyMove);
-        this.addEventListener('tilelaunchstart', this.onLaunchStart);
-        this.addEventListener('tilelaunchend', this.onLaunchEnd);
+        // On the document: a launch anywhere on the page takes the whole screen, not only the group
+        // of the tile.
+        document.addEventListener('tilelaunchstart', this.onLaunchStart);
+        document.addEventListener('tilelaunchend', this.onLaunchEnd);
         if (typeof MutationObserver !== 'undefined') {
             this.mutationObserver = new MutationObserver((records) => this.onMutations(records));
             // Any element can be a tile, so the group watches the size attributes of its children
@@ -315,8 +322,8 @@ export class AxTileGroup extends HTMLElement {
         this.removeEventListener('contextmenu', this.onContextMenu);
         this.removeEventListener('touchmove', this.onTouchMove);
         this.removeEventListener('keydown', this.onKeyMove);
-        this.removeEventListener('tilelaunchstart', this.onLaunchStart);
-        this.removeEventListener('tilelaunchend', this.onLaunchEnd);
+        document.removeEventListener('tilelaunchstart', this.onLaunchStart);
+        document.removeEventListener('tilelaunchend', this.onLaunchEnd);
         if (this.mutationObserver) this.mutationObserver.disconnect();
         if (this.resizeObserver) this.resizeObserver.disconnect();
         this.mutationObserver = this.resizeObserver = null;
@@ -731,11 +738,11 @@ export class AxTileGroup extends HTMLElement {
         if (this.run || launching) this.kick();
     };
 
-    // A tile launched: the others shrink toward the middle of the group and fade. A listener above
-    // the group may still cancel the event, so the decision waits until it has passed them all.
+    // A tile launched somewhere on the page: the other tiles shrink toward the middle of the screen
+    // and fade, in every group. A listener may still cancel the event after the document, so the
+    // decision waits until it has passed them all.
     private onLaunchStart = (event: Event) => {
         const source = this.tileOf(event);
-        if (!source) return;
         Promise.resolve().then(() => {
             if (!event.defaultPrevented) this.startLaunch(source);
         });
@@ -748,12 +755,15 @@ export class AxTileGroup extends HTMLElement {
         if (variant) this.enter({ variant });
     };
 
-    private startLaunch(source: HTMLElement) {
+    private startLaunch(source: HTMLElement | null) {
         const params = readParams(getComputedStyle(this));
         this.clearLaunch();
         // The user wants no motion: the end of the launch at once.
         const duration = reducedMotion() ? 0 : params.launchDuration;
-        this.launch = { source, start: performance.now(), duration, scale: params.launchScale };
+        const rect = this.getBoundingClientRect();
+        const cx = window.innerWidth / 2 - rect.left;
+        const cy = window.innerHeight / 2 - rect.top;
+        this.launch = { source, cx, cy, start: performance.now(), duration, scale: params.launchScale };
         this.launchFrame(performance.now());
         this.kick();
     }
@@ -801,11 +811,11 @@ export class AxTileGroup extends HTMLElement {
         let y = at.y;
         let scale = at.scale;
         if (look.launch !== 1) {
-            // Scaled about the middle of the group. The translate below assumes the transform origin
-            // is the middle of the tile, which is the default.
+            // Scaled about the middle of the screen (see Launch). The translate below assumes the
+            // transform origin is the middle of the tile, which is the default.
             const l = look.launch;
-            const cx = this.clientWidth / 2;
-            const cy = this.clientHeight / 2;
+            const cx = this.launch ? this.launch.cx : this.clientWidth / 2;
+            const cy = this.launch ? this.launch.cy : this.clientHeight / 2;
             x = cx + l * (x - cx) - (1 - l) * (tile.offsetWidth / 2);
             y = cy + l * (y - cy) - (1 - l) * (tile.offsetHeight / 2);
             scale *= l;
