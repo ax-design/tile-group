@@ -9,18 +9,25 @@ export type EntranceVariant = 'desktop' | 'mobile';
 
 // The values read from the group when an animation starts.
 export interface Params {
-    // px to the right of the place, where a desktop tile starts.
-    enterOffset: number;
+    // px to the right of the place, where a desktop band starts on top of its spread; null for 1%
+    // of the width of the viewport.
+    enterOffset: number | null;
+    // The bands start at this share of their distance from the middle of the viewport, along the
+    // group, and open out to their places.
+    enterSpread: number;
     // ms, of the move.
     enterDuration: number;
     enterEasing: Bezier;
-    // The scale a tile starts at, about its middle, and the ms and curve of its growth to 1.
+    // The scale a band starts at, and the ms and curve of its growth to 1.
     enterScale: number;
     enterScaleDuration: number;
     enterScaleEasing: Bezier;
     // ms, of the fade in, linear.
     enterFade: number;
-    // ms between two columns (rows, vertical).
+    // Columns (rows, vertical) in a band: the tiles that enter together, as one picture. null for
+    // the strip of the group, a column of the Start screen.
+    enterBand: number | null;
+    // ms between two bands.
     enterStagger: number;
     // ms before the first column.
     enterDelay: number;
@@ -44,10 +51,14 @@ export interface EntranceFrame {
     enter: number;
 }
 
-// The desktop numbers are fitted, column by column, to a 60 fps recording of Windows 8.1, with
-// curves of the Windows animation theme: a tile grows from 0.8 with curve 4 in about 450 ms, moves
-// from about 3.75% of the screen width (60 px) with curve 61 in about 500 ms, and fades in, linear,
-// in about 120 ms. Windows Phone turnstile: easeOutQuint.
+// The desktop numbers are fitted, tile by tile, to a 60 fps recording of Windows 8.1 (within 2 px
+// of every tile in every frame), with curves of the Windows animation theme. The Start screen
+// enters in bands, the columns of the Start screen (two medium tiles wide), 35 ms apart across all the groups. A band is one picture:
+// it grows from 0.8 with curve 4 in about 450 ms, about the middle of its width and of the height
+// of the group, and fades in, linear, in about 133 ms. The bands start drawn together toward the
+// middle of the screen (at 93% of their distance from it) and 1% of its width to the right, and
+// open out with curve 61 in about 530 ms: the bands on the left travel the most. Windows Phone
+// turnstile: easeOutQuint.
 const DESKTOP_EASING: Bezier = [0.17, 0.55, 0.3, 0.95];
 const DESKTOP_SCALE_EASING: Bezier = [0.1, 0.9, 0.2, 1];
 const TURNSTILE_EASING: Bezier = [0.22, 1, 0.36, 1];
@@ -55,14 +66,16 @@ const TURNSTILE_EASING: Bezier = [0.22, 1, 0.36, 1];
 export function readParams(style: CSSStyleDeclaration): Params {
     const value = (name: string) => style.getPropertyValue(name).trim();
     return {
-        enterOffset: parseLengthOr(value('--tile-enter-offset'), 60),
-        enterDuration: parseTime(value('--tile-enter-duration'), 500),
+        enterOffset: parseLengthOr(value('--tile-enter-offset'), null),
+        enterSpread: parseNumber(value('--tile-enter-spread'), 0.93),
+        enterDuration: parseTime(value('--tile-enter-duration'), 530),
         enterEasing: parseEasingOr(value('--tile-enter-easing'), DESKTOP_EASING),
         enterScale: parseNumber(value('--tile-enter-scale'), 0.8),
         enterScaleDuration: parseTime(value('--tile-enter-scale-duration'), 450),
         enterScaleEasing: parseEasingOr(value('--tile-enter-scale-easing'), DESKTOP_SCALE_EASING),
-        enterFade: parseTime(value('--tile-enter-fade'), 120),
-        enterStagger: parseTime(value('--tile-enter-stagger'), 33),
+        enterFade: parseTime(value('--tile-enter-fade'), 133),
+        enterBand: parseBand(value('--tile-enter-band')),
+        enterStagger: parseTime(value('--tile-enter-stagger'), 35),
         enterDelay: parseTime(value('--tile-enter-delay'), 0),
         exitDuration: parseTime(value('--tile-exit-duration'), 200),
         turnstilePerspective: parseLengthOr(value('--tile-turnstile-perspective'), 1000),
@@ -81,9 +94,15 @@ export function parseTime(text: string, fallback: number): number {
 }
 
 // <length>, in px only (as typed-om reads it); "0" is a length too.
-function parseLengthOr(text: string, fallback: number): number {
+function parseLengthOr<T>(text: string, fallback: T): number | T {
     const px = parseLength(text);
     return px === null || !isFinite(px) ? fallback : px;
+}
+
+// A whole number of columns, 1 or more; null for anything else.
+function parseBand(text: string): number | null {
+    const n = parseNumber(text, NaN);
+    return n >= 1 ? Math.round(n) : null;
 }
 
 function parseNumber(text: string, fallback: number): number {
@@ -108,12 +127,21 @@ function progress(t: number, duration: number): number {
     return duration > 0 ? clamp01(t / duration) : 1;
 }
 
-// Desktop entrance: a tile starts `delay` ms after the start; it moves from enterOffset px to the
-// right and grows from enterScale while it fades in. The fade is the fastest, the move the slowest.
-export function enterDesktop(t: number, delay: number, p: Params): EntranceFrame {
+// Desktop entrance: a band starts `delay` ms after the start; it moves from `shift` px away from
+// its place (see bandShift) and grows from enterScale while it fades in. The fade is the fastest,
+// the move the slowest.
+export function enterDesktop(t: number, delay: number, shift: number, p: Params): EntranceFrame {
     const move = bezierAt(p.enterEasing, progress(t - delay, p.enterDuration));
     const grow = bezierAt(p.enterScaleEasing, progress(t - delay, p.enterScaleDuration));
-    return { dx: p.enterOffset * (1 - move), scale: p.enterScale + (1 - p.enterScale) * grow, rotateY: 0, enter: progress(t - delay, p.enterFade) };
+    return { dx: shift * (1 - move), scale: p.enterScale + (1 - p.enterScale) * grow, rotateY: 0, enter: progress(t - delay, p.enterFade) };
+}
+
+// Where a band starts, in px from its place along the group: drawn toward the middle of the
+// viewport by its spread, and enterOffset further on (to the right, or down when vertical).
+// `middle` is the middle of the band, `center` the one of the viewport, `size` its width (height).
+export function bandShift(middle: number, center: number, size: number, p: Params): number {
+    const offset = p.enterOffset === null ? size * 0.01 : p.enterOffset;
+    return (1 - p.enterSpread) * (center - middle) + offset;
 }
 
 // The length of a desktop entrance of one tile: the longest of its move, its growth and its fade.

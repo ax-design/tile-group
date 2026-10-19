@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { enterDesktop, exitDesktop, parseTime, parseVariant, readParams, turnstile, turnstileBegin } from '../src/entrance.js';
+import { bandShift, enterDesktop, exitDesktop, parseTime, parseVariant, readParams, turnstile, turnstileBegin } from '../src/entrance.js';
 
 // A style declaration with only the given custom properties.
 const style = (values: Record<string, string>) => ({ getPropertyValue: (name: string) => values[name] || '' }) as CSSStyleDeclaration;
@@ -23,13 +23,15 @@ describe('parseTime', () => {
 describe('readParams', () => {
     test('uses the defaults when nothing is set', () => {
         const p = readParams(style({}));
-        expect(p.enterOffset).toBe(60);
-        expect(p.enterDuration).toBe(500);
+        expect(p.enterOffset).toBe(null);
+        expect(p.enterSpread).toBe(0.93);
+        expect(p.enterBand).toBe(null);
+        expect(p.enterDuration).toBe(530);
         expect(p.enterScale).toBe(0.8);
         expect(p.enterScaleDuration).toBe(450);
         expect(p.enterScaleEasing).toEqual([0.1, 0.9, 0.2, 1]);
-        expect(p.enterFade).toBe(120);
-        expect(p.enterStagger).toBe(33);
+        expect(p.enterFade).toBe(133);
+        expect(p.enterStagger).toBe(35);
         expect(p.enterDelay).toBe(0);
         expect(p.exitDuration).toBe(200);
         expect(p.turnstilePerspective).toBe(1000);
@@ -70,19 +72,29 @@ describe('parseVariant', () => {
 describe('the curves', () => {
     const p = readParams(style({}));
 
-    test('a desktop tile starts offset and transparent, and ends in place', () => {
-        expect(enterDesktop(0, 0, p)).toEqual({ dx: 60, scale: 0.8, rotateY: 0, enter: 0 });
+    test('a desktop band starts shifted, small and transparent, and ends in place', () => {
+        expect(enterDesktop(0, 0, 60, p)).toEqual({ dx: 60, scale: 0.8, rotateY: 0, enter: 0 });
         // It has faded in before it has grown, and grown before it has arrived, as in Windows.
-        const faded = enterDesktop(120, 0, p);
+        const faded = enterDesktop(133, 0, 60, p);
         expect(faded.enter).toBe(1);
         expect(faded.scale).toBeLessThan(1);
         expect(1 - faded.scale).toBeLessThan(0.2 * (faded.dx / 60));
-        const end = enterDesktop(500, 0, p);
+        const end = enterDesktop(530, 0, 60, p);
         expect(end.scale).toBeCloseTo(1, 9);
         expect(end.dx).toBeCloseTo(0, 9);
         expect(end.enter).toBeCloseTo(1, 9);
-        // A delayed tile waits.
-        expect(enterDesktop(100, 200, p).enter).toBe(0);
+        // A delayed band waits.
+        expect(enterDesktop(100, 200, 60, p).enter).toBe(0);
+    });
+
+    test('a band starts drawn toward the middle of the viewport, and 1% of it further on', () => {
+        // 1000 px wide viewport: the middle is at 500, the offset 10 px.
+        expect(bandShift(500, 500, 1000, p)).toBeCloseTo(10, 9);
+        // Left of the middle: it starts to the right, 7% of the way, and the other way on the right.
+        expect(bandShift(100, 500, 1000, p)).toBeCloseTo(0.07 * 400 + 10, 9);
+        expect(bandShift(900, 500, 1000, p)).toBeCloseTo(-0.07 * 400 + 10, 9);
+        // A set offset takes the place of the 1%.
+        expect(bandShift(500, 500, 1000, readParams(style({ '--tile-enter-offset': '24px' })))).toBeCloseTo(24, 9);
     });
 
     test('the desktop exit fades without moving', () => {

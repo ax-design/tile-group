@@ -176,17 +176,19 @@ With a variant set, the group plays it once, the first time it is visible (with 
 
 A change in the middle of an entrance or an exit ends it at once, at its end state, and resolves its promise: a change of the places, the sizes or the children of the group (a resize that moves tiles included), or a change of the variant the property gives. The new layout or variant then applies as usual; a running animation is never switched from one variant to the other.
 
-**Desktop** is the entrance of the Windows 8 Start screen: each tile starts `--tile-enter-offset` to the right of its place, smaller and transparent, and moves to its place while it grows and fades in. The fade is the fastest, the move the slowest. Tiles start one column after another, each after the one before it. The defaults are fitted, column by column, to a 60 fps recording of Windows 8.1, with curves of the Windows animation theme (`windowsEasing(id)` of `@ax-design/surface`).
+**Desktop** is the entrance of the Windows 8 Start screen. The tiles enter in bands, a few columns wide, one band after another. A band is one picture: it starts smaller and transparent, and grows to its full size as it fades in, about the middle of the band along the group and the middle of the group across it, so its tiles keep together. The bands start drawn toward the middle of the viewport and a little to the right, and open out to their places: a band far to the left travels further than one near the middle. The fade is the fastest, the move the slowest. The defaults are fitted, tile by tile, to a 60 fps recording of Windows 8.1 (within 2 px of every tile in every frame), with curves of the Windows animation theme (`windowsEasing(id)` of `@ax-design/surface`).
 
-* `--tile-enter-offset`: the distance, `60px` (about 3.75% of the width of the screen in the recording).
-* `--tile-enter-duration`: the move, `500ms`.
+* `--tile-enter-band`: the columns in a band; by default those of a strip (see `strip`), four, which is the width of a wide tile and a column of the Start screen. With `orientation="vertical"` it counts rows.
+* `--tile-enter-spread`: where the bands start, as a share of their distance from the middle of the viewport, `0.93`.
+* `--tile-enter-offset`: how much further to the right the bands start, a length; by default 1% of the width of the viewport.
+* `--tile-enter-duration`: the move, `530ms`.
 * `--tile-enter-easing`: the curve of the move, `cubic-bezier(0.17, 0.55, 0.3, 0.95)` (curve 61).
-* `--tile-enter-scale`: the scale a tile starts at, about its middle, `0.8`.
+* `--tile-enter-scale`: the scale a band starts at, `0.8`.
 * `--tile-enter-scale-duration`: the growth to full size, `450ms`.
 * `--tile-enter-scale-easing`: the curve of the growth, `cubic-bezier(0.1, 0.9, 0.2, 1)` (curve 4).
-* `--tile-enter-fade`: the fade in, linear, `120ms`.
-* `--tile-enter-stagger`: the delay between two columns, `33ms`. With `orientation="vertical"` it is between two rows.
-* `--tile-enter-delay`: the delay before the first column, `0ms`.
+* `--tile-enter-fade`: the fade in, linear, `133ms`.
+* `--tile-enter-stagger`: the delay between two bands, `35ms`.
+* `--tile-enter-delay`: the delay before the first band, `0ms`.
 * `--tile-exit-duration`: the fade of the exit, which does not move, `200ms`.
 
 **Mobile** is the turnstile of Windows Phone, after the Flutter implementation of the team: each tile turns 90 degrees about the left edge of the group, to face the viewer, while it fades in; the exit turns it away again. A tile starts at `tileY * 0.001714 + tileX * 0.00047 + random * 0.1` of the duration (a fraction, clamped to 0 to 0.9), so the tiles lower in the group come later, and those to the right come later when entering and earlier when exiting; `-0.00047` for the exit.
@@ -212,15 +214,15 @@ The launched tile is raised above the others (`z-index`) until `tilelaunchend`, 
 
 ## Start screen
 
-The background of the Start screen is the page's own, behind the groups. As in Windows 8.1, it comes in first (about 120 ms), then the groups one after the other: the second group starts once the columns of the first have started (33 ms each).
+The background of the Start screen is the page's own, behind the groups. As in Windows 8.1, it comes in first (about 120 ms), then the bands of all the groups, 35 ms apart, as if they were one: a group adds no pause of its own, so the second group starts one stagger after the last band of the first.
 
 ```html
 <style>
   body { background: url(start-background.jpg) center / cover; }
   #back, #front { --tile-entrance: desktop; }
   #back { --tile-enter-delay: 120ms; }
-  /* After the four columns of the first group. */
-  #front { --tile-enter-delay: 250ms; }
+  /* After the two bands (four columns) of the first group: 120 + 2 x 35 ms. */
+  #front { --tile-enter-delay: 190ms; }
 </style>
 <ax-tile-group id="back"> ... </ax-tile-group>
 <ax-tile-group id="front"> ... </ax-tile-group>

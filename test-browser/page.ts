@@ -656,7 +656,7 @@ async function run() {
         byId('en').scrollIntoView({ block: 'start' });
         await wait(300);
         if (!reduced) {
-            // The last column (en4, the fifth) starts 4 x 300 ms after the first.
+            // en4, in the third band (four columns each), starts 2 x 300 ms after the first.
             check('entrance: the first column starts before the last', opacityOf(byId('en1')) > 0 && opacityOf(byId('en1')) < 1 && opacityOf(byId('en4')) === 0, `${opacityOf(byId('en1'))} ${opacityOf(byId('en4'))}`);
         }
         await wait(2300);
@@ -669,8 +669,8 @@ async function run() {
         await wait(300);
         check('entrance: it plays once, not again when scrolled back in', rest(en), enTiles.map((id) => opacityOf(byId(id))).join(' '));
 
-        // 13c. enter() and exit() of the desktop variant. The timing is that of the defaults: the
-        // last column (two columns after the first) starts 2 x 33 ms late.
+        // 13c. enter() and exit() of the desktop variant, with the timing of the page (1000 ms each)
+        // and the default stagger.
         const exiting = en.exit({ variant: 'desktop' });
         if (!reduced) {
             await wait(100);
@@ -680,15 +680,39 @@ async function run() {
         check('desktop exit: the tiles end invisible', enTiles.every((id) => opacityOf(byId(id)) === 0), enTiles.map((id) => opacityOf(byId(id))).join(' '));
         const t0 = performance.now();
         let arrived = false;
+        let midBand: { dy: number; dx: number; s1: number; s2: number } | null = null;
+        // Bands four columns wide: en1 and en2, side by side, enter together.
+        en.style.setProperty('--tile-enter-band', '4');
         const entering = en.enter({ variant: 'desktop' }).then(() => (arrived = true));
         if (!reduced) {
             await wait(300);
             const m = motionOf(byId('en1'));
             const grown = /scale\(([\d.]+)\)/.exec(byId('en1').style.transform);
             check('desktop enter: midway a tile grows, on its host, between 0.8 and 1', !!grown && +grown[1] > 0.8 && +grown[1] < 1, byId('en1').style.transform);
+            // en1 and en2 share the first band: one picture, scaled about one point. The distance of
+            // their middles is the scale times the one at rest, and they are level.
+            const middleOf = (id: string) => {
+                const el = byId(id);
+                const t = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform);
+                return t ? { x: +t[1] + el.offsetWidth / 2, y: +t[2] + el.offsetHeight / 2 } : { x: NaN, y: NaN };
+            };
+            const scaleOf = (id: string) => {
+                const g = /scale\(([\d.]+)\)/.exec(byId(id).style.transform);
+                return g ? +g[1] : 1;
+            };
+            const a1 = middleOf('en1');
+            const a2 = middleOf('en2');
+            const s1 = scaleOf('en1');
+            midBand = { dy: a2.y - a1.y, dx: a2.x - a1.x, s1, s2: scaleOf('en2') };
             check('desktop enter: midway a surface fades in, with its host 2D and opaque', !!m && m.opacity! > 0 && m.opacity! < 1 && getComputedStyle(byId('en1')).opacity === '1' && !/matrix3d/.test(getComputedStyle(byId('en1')).transform), `${JSON.stringify(m)} ${getComputedStyle(byId('en1')).transform}`);
         }
         await entering;
+        en.style.removeProperty('--tile-enter-band');
+        if (midBand) {
+            const restDx = parseFloat(/translate\(([-\d.]+)px/.exec(byId('en2').style.transform)![1]) - parseFloat(/translate\(([-\d.]+)px/.exec(byId('en1').style.transform)![1]);
+            const b = midBand as { dy: number; dx: number; s1: number; s2: number };
+            check('desktop enter: the tiles of a band grow as one picture', restDx > 0 && b.s1 === b.s2 && b.s1 < 1 && Math.abs(b.dx - b.s1 * restDx) < 0.5 && Math.abs(b.dy) < 0.5, `${JSON.stringify(b)} rest ${restDx}`);
+        }
         const took = performance.now() - t0;
         check('enter() resolves when the last tile arrived', arrived && (reduced ? took < 200 : took >= 1000 && took < 1400), `${Math.round(took)} ms`);
         check('enter() brings the tiles back to rest', rest(en), enTiles.map((id) => opacityOf(byId(id))).join(' '));

@@ -45,7 +45,7 @@
 import { services } from '@ax-design/surface';
 import type { MotionState } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
-import { clamp01, enterDesktop, enterLength, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin } from './entrance.js';
+import { bandShift, clamp01, enterDesktop, enterLength, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin } from './entrance.js';
 import type { EntranceVariant, EntranceFrame, Params } from './entrance.js';
 import { layoutTiles } from './layout.js';
 import type { LayoutResult } from './layout.js';
@@ -140,8 +140,9 @@ interface Placed {
 // What the entrance, the launch and the drag add to the drawing of a tile (see writeTile). Each
 // one writes its own fields; the opacity is their product.
 interface Look {
-    // Entrance (desktop): px to the right of the place, and scale about the middle of the tile.
+    // Entrance (desktop): px from the place, and scale about the middle of the tile.
     dx: number;
+    dy: number;
     grow: number;
     // Entrance (mobile): degrees turned about the left edge of the group, and the perspective.
     rotateY: number;
@@ -165,6 +166,7 @@ interface Look {
 interface Hold {
     kind: 'enter' | 'exit';
     dx: number;
+    dy: number;
     grow: number;
     rotateY: number;
     perspective: number;
@@ -631,6 +633,16 @@ export class AxTileGroup extends HTMLElement {
         const p = run.params;
         const m = this.m;
         let total = run.duration;
+        // Desktop entrance: the bands, the middle of the viewport along the group, and the middle of
+        // the group across it, in the px of the group.
+        const vertical = this.vertical;
+        const step = vertical ? m.cellHeight + m.gap : m.cellWidth + m.gap;
+        const desktopEnter = run.variant !== 'mobile' && run.kind === 'enter';
+        const box = desktopEnter ? this.getBoundingClientRect() : null;
+        const viewport = vertical ? window.innerHeight : window.innerWidth;
+        const center = box ? viewport / 2 - (vertical ? box.top : box.left) : 0;
+        const across = vertical ? this.clientWidth / 2 : this.clientHeight / 2;
+        const bandSize = p.enterBand || this.strip;
         for (const tile of this.tiles) {
             const at = this.shown.get(tile);
             if (!at) continue;
@@ -638,15 +650,32 @@ export class AxTileGroup extends HTMLElement {
             if (run.variant === 'mobile') {
                 const begin = turnstileBegin(at.x, at.y, run.kind === 'enter', run.randoms.get(tile) || 0);
                 frame = turnstile(run.duration > 0 ? t / run.duration : 1, begin, run.kind === 'enter', p);
-            } else if (run.kind === 'enter') {
-                // The column (row, vertical) of the tile sets its delay.
-                const index = this.vertical ? Math.round(at.y / (m.cellHeight + m.gap)) : Math.round(at.x / (m.cellWidth + m.gap));
-                const delay = p.enterDelay + index * p.enterStagger;
+            } else if (desktopEnter) {
+                // The band of the tile sets its delay, and it grows as one picture with the other
+                // tiles of the band: about the middle of the band along the group, and the middle of
+                // the group across it.
+                const band = Math.floor(Math.round((vertical ? at.y : at.x) / step) / bandSize);
+                const delay = p.enterDelay + band * p.enterStagger;
                 total = Math.max(total, delay + run.duration);
-                frame = enterDesktop(t, delay, p);
+                const middle = band * bandSize * step + (bandSize * step - m.gap) / 2;
+                frame = enterDesktop(t, delay, bandShift(middle, center, viewport, p), p);
+                const half = { x: tile.offsetWidth / 2, y: tile.offsetHeight / 2 };
+                const along = (vertical ? at.y + half.y : at.x + half.x) - middle;
+                const off = (vertical ? at.x + half.x : at.y + half.y) - across;
+                const pull = frame.scale - 1;
+                const look = this.lookOf(tile);
+                look.dx = vertical ? pull * off : frame.dx + pull * along;
+                look.dy = vertical ? frame.dx + pull * along : pull * off;
+                look.grow = frame.scale;
+                look.rotateY = 0;
+                look.perspective = p.turnstilePerspective;
+                look.enter = frame.enter;
+                this.writeTile(tile);
+                continue;
             } else frame = exitDesktop(t, p);
             const look = this.lookOf(tile);
             look.dx = frame.dx;
+            look.dy = 0;
             look.grow = frame.scale;
             look.rotateY = frame.rotateY;
             look.perspective = p.turnstilePerspective;
@@ -690,7 +719,7 @@ export class AxTileGroup extends HTMLElement {
     private lookOf(tile: HTMLElement): Look {
         let look = this.looks.get(tile);
         if (!look) {
-            look = { dx: 0, grow: 1, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
+            look = { dx: 0, dy: 0, grow: 1, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
             setEntrance(look, this.hold);
             this.looks.set(tile, look);
         }
@@ -814,7 +843,7 @@ export class AxTileGroup extends HTMLElement {
         if (!at) return;
         const look = this.lookOf(tile);
         let x = at.x + look.dx;
-        let y = at.y;
+        let y = at.y + look.dy;
         // The growth of the entrance is about the middle of the tile, the transform origin.
         let scale = at.scale * look.grow;
         if (look.launch !== 1) {
@@ -1287,12 +1316,13 @@ function transformOf(x: number, y: number, scale: number): string {
 function holdFor(kind: 'enter' | 'exit', variant: EntranceVariant, p: Params): Hold {
     const mobile = variant === 'mobile';
     const desktopEnter = kind === 'enter' && !mobile;
-    return { kind, dx: desktopEnter ? p.enterOffset : 0, grow: desktopEnter ? p.enterScale : 1, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, enter: 0 };
+    return { kind, dx: 0, dy: 0, grow: desktopEnter ? p.enterScale : 1, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, enter: 0 };
 }
 
 // The entrance fields of a look: those of the hold, or none.
 function setEntrance(look: Look, hold: Hold | null) {
     look.dx = hold ? hold.dx : 0;
+    look.dy = hold ? hold.dy : 0;
     look.grow = hold ? hold.grow : 1;
     look.rotateY = hold ? hold.rotateY : 0;
     look.perspective = hold ? hold.perspective : DEFAULT_PERSPECTIVE;
