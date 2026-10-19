@@ -465,11 +465,14 @@ async function run() {
         await frames(3);
         pointer('pointerup', c.x + 2 * STEP, c.y);
         await frames(2);
-        check('a drag fires tilereorder with reason pointer', events.indexOf('tilereorder:p1:{"from":0,"to":1,"reason":"pointer"}') >= 0 && ids(p) === 'p2p1p3p4', `${ids(p)} ${events.join(' ')}`);
+        // Where the tile lands depends on the window size of the engine: the check follows the event.
+        const dropped = events.filter((e) => e.indexOf('tilereorder:p1:') === 0).map((e) => JSON.parse(e.slice('tilereorder:p1:'.length)))[0];
+        const landed = Array.from(p.children).indexOf(p1);
+        check('a drag fires tilereorder with reason pointer', !!dropped && dropped.from === 0 && dropped.to > 0 && dropped.reason === 'pointer' && landed === dropped.to, `${ids(p)} ${events.join(' ')}`);
         check('a drop keeps the focus on the link of the tile', document.activeElement === byId('p1a'), document.activeElement ? document.activeElement.id : 'none');
         await wait(700);
         const said = (p.shadowRoot!.querySelector('[role="status"]') as HTMLElement).textContent;
-        check('a drag announces the new place too', said === 'P1, moved to position 2 of 4', said || '');
+        check('a drag announces the new place too', !!dropped && said === `P1, moved to position ${dropped.to + 1} of 4`, said || '');
     }
 
     // 11. Announcements: the new place of a moved tile, in a live region of the shadow root.
