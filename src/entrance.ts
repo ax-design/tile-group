@@ -11,9 +11,11 @@ export type EntranceVariant = 'desktop' | 'mobile';
 export interface Params {
     // px to the right of the place, where a desktop tile starts.
     enterOffset: number;
-    // ms.
+    // ms, of the move.
     enterDuration: number;
     enterEasing: Bezier;
+    // ms, of the fade in, linear.
+    enterFade: number;
     // ms between two columns (rows, vertical).
     enterStagger: number;
     // ms before the first column.
@@ -38,15 +40,18 @@ export interface EntranceFrame {
 }
 
 // Windows 8 Start screen: cubic-bezier(0, 0.5, 0.5, 1). Windows Phone turnstile: easeOutQuint.
+// The desktop numbers are fitted to a 60 fps recording of Windows 8.1: the move takes about 300 ms
+// from about 6% of the screen width (80 px on a 1366 px screen), and the fade about 100 ms.
 const DESKTOP_EASING: Bezier = [0, 0.5, 0.5, 1];
 const TURNSTILE_EASING: Bezier = [0.22, 1, 0.36, 1];
 
 export function readParams(style: CSSStyleDeclaration): Params {
     const value = (name: string) => style.getPropertyValue(name).trim();
     return {
-        enterOffset: parseLengthOr(value('--tile-enter-offset'), 225),
-        enterDuration: parseTime(value('--tile-enter-duration'), 1000),
+        enterOffset: parseLengthOr(value('--tile-enter-offset'), 80),
+        enterDuration: parseTime(value('--tile-enter-duration'), 300),
         enterEasing: parseEasingOr(value('--tile-enter-easing'), DESKTOP_EASING),
+        enterFade: parseTime(value('--tile-enter-fade'), 100),
         enterStagger: parseTime(value('--tile-enter-stagger'), 33),
         enterDelay: parseTime(value('--tile-enter-delay'), 0),
         exitDuration: parseTime(value('--tile-exit-duration'), 200),
@@ -94,10 +99,15 @@ function progress(t: number, duration: number): number {
 }
 
 // Desktop entrance: a tile starts `delay` ms after the start, and moves from enterOffset px to
-// the right while it fades in.
+// the right while it fades in, faster than it moves.
 export function enterDesktop(t: number, delay: number, p: Params): EntranceFrame {
     const e = bezierAt(p.enterEasing, progress(t - delay, p.enterDuration));
-    return { dx: p.enterOffset * (1 - e), rotateY: 0, enter: e };
+    return { dx: p.enterOffset * (1 - e), rotateY: 0, enter: progress(t - delay, p.enterFade) };
+}
+
+// The length of a desktop entrance of one tile: the longer of its move and its fade.
+export function enterLength(p: Params): number {
+    return Math.max(p.enterDuration, p.enterFade);
 }
 
 // Desktop exit: the tiles fade out, without moving.

@@ -45,7 +45,7 @@
 import { services } from '@ax-design/surface';
 import type { MotionState } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
-import { clamp01, enterDesktop, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin } from './entrance.js';
+import { clamp01, enterDesktop, enterLength, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin } from './entrance.js';
 import type { EntranceVariant, EntranceFrame, Params } from './entrance.js';
 import { layoutTiles } from './layout.js';
 import type { LayoutResult } from './layout.js';
@@ -607,7 +607,7 @@ export class AxTileGroup extends HTMLElement {
             this.showHold();
             return nextFrame();
         }
-        const duration = variant === 'mobile' ? params.turnstileDuration : kind === 'enter' ? params.enterDuration : params.exitDuration;
+        const duration = variant === 'mobile' ? params.turnstileDuration : kind === 'enter' ? enterLength(params) : params.exitDuration;
         // Mobile: each tile's share of the duration at which its turn starts is worked out from its
         // place at every frame, with this random part.
         const randoms = new Map<HTMLElement, number>();

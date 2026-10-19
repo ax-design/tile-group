@@ -23,15 +23,16 @@ describe('parseTime', () => {
 describe('readParams', () => {
     test('uses the defaults when nothing is set', () => {
         const p = readParams(style({}));
-        expect(p.enterOffset).toBe(225);
-        expect(p.enterDuration).toBe(1000);
+        expect(p.enterOffset).toBe(80);
+        expect(p.enterDuration).toBe(300);
+        expect(p.enterFade).toBe(100);
         expect(p.enterStagger).toBe(33);
         expect(p.enterDelay).toBe(0);
         expect(p.exitDuration).toBe(200);
         expect(p.turnstilePerspective).toBe(1000);
         expect(p.turnstileDuration).toBe(600);
         expect(p.launchScale).toBe(0.9);
-        expect(p.launchDuration).toBe(150);
+        expect(p.launchDuration).toBe(100);
         expect(p.enterEasing).toEqual([0, 0.5, 0.5, 1]);
         expect(p.turnstileEasing).toEqual([0.22, 1, 0.36, 1]);
     });
@@ -67,8 +68,12 @@ describe('the curves', () => {
     const p = readParams(style({}));
 
     test('a desktop tile starts offset and transparent, and ends in place', () => {
-        expect(enterDesktop(0, 0, p)).toEqual({ dx: 225, rotateY: 0, enter: 0 });
-        const end = enterDesktop(1000, 0, p);
+        expect(enterDesktop(0, 0, p)).toEqual({ dx: 80, rotateY: 0, enter: 0 });
+        // It has faded in before it has arrived, as in Windows.
+        const faded = enterDesktop(100, 0, p);
+        expect(faded.enter).toBe(1);
+        expect(faded.dx).toBeGreaterThan(1);
+        const end = enterDesktop(300, 0, p);
         expect(end.dx).toBeCloseTo(0, 9);
         expect(end.enter).toBeCloseTo(1, 9);
         // A delayed tile waits.

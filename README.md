@@ -176,10 +176,11 @@ With a variant set, the group plays it once, the first time it is visible (with 
 
 A change in the middle of an entrance or an exit ends it at once, at its end state, and resolves its promise: a change of the places, the sizes or the children of the group (a resize that moves tiles included), or a change of the variant the property gives. The new layout or variant then applies as usual; a running animation is never switched from one variant to the other.
 
-**Desktop** is the entrance of the Windows 8 Start screen: each tile starts `--tile-enter-offset` to the right of its place, transparent, and moves to its place while it fades in. Tiles start one column after another, each after the one before it.
+**Desktop** is the entrance of the Windows 8 Start screen: each tile starts `--tile-enter-offset` to the right of its place, transparent, and moves to its place while it fades in, faster than it moves. Tiles start one column after another, each after the one before it. The defaults are fitted to a 60 fps recording of Windows 8.1.
 
-* `--tile-enter-offset`: the distance, `225px`.
-* `--tile-enter-duration`: `1000ms`.
+* `--tile-enter-offset`: the distance, `80px` (about 6% of the width of the screen in the recording).
+* `--tile-enter-duration`: the move, `300ms`.
+* `--tile-enter-fade`: the fade in, linear, `100ms`.
 * `--tile-enter-easing`: `cubic-bezier(0, 0.5, 0.5, 1)`, the one Windows 8 uses for the Start screen (`windowsEasing(54)` of `@ax-design/surface`).
 * `--tile-enter-stagger`: the delay between two columns, `33ms`. With `orientation="vertical"` it is between two rows.
 * `--tile-enter-delay`: the delay before the first column, `0ms`.
@@ -208,14 +209,15 @@ The launched tile is raised above the others (`z-index`) until `tilelaunchend`, 
 
 ## Start screen
 
-The background of the Start screen is the page's own, behind the groups, and the groups come in one after the other with a parallax: the second group starts later and moves further.
+The background of the Start screen is the page's own, behind the groups. As in Windows 8.1, it comes in first (about 120 ms), then the groups one after the other: the second group starts once the columns of the first have started (33 ms each).
 
 ```html
 <style>
   body { background: url(start-background.jpg) center / cover; }
   #back, #front { --tile-entrance: desktop; }
-  #back { --tile-enter-delay: 0ms; --tile-enter-offset: 225px; }
-  #front { --tile-enter-delay: 300ms; --tile-enter-offset: 90px; }
+  #back { --tile-enter-delay: 120ms; }
+  /* After the four columns of the first group. */
+  #front { --tile-enter-delay: 250ms; }
 </style>
 <ax-tile-group id="back"> ... </ax-tile-group>
 <ax-tile-group id="front"> ... </ax-tile-group>

@@ -2,7 +2,8 @@
 <html><head><meta charset="utf-8"><title>tile group browser test</title>
 <style>
   body { margin: 0; padding: 20px; }
-  ax-tile-group { --tile-cell-width: 40px; --tile-cell-height: 40px; --tile-gap: 4px; --tile-rows: 4; margin-bottom: 30px; }
+  /* The entrance runs over 1 s here (300 ms and 100 ms by default), so the checks can sample it midway. */
+  ax-tile-group { --tile-cell-width: 40px; --tile-cell-height: 40px; --tile-gap: 4px; --tile-rows: 4; margin-bottom: 30px; --tile-enter-duration: 1000ms; --tile-enter-fade: 1000ms; }
   ax-tile-group.roomy { --tile-cell-width: 48px; --tile-cell-height: 64px; }
   ax-tile { --ax-fill-color: #889; }
   /* The entrance of a group is a page's choice: none by default. */
