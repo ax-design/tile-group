@@ -161,6 +161,64 @@ The group reads these properties again when the style may have changed (classes,
 
 Tiles move and fade by script, frame by frame, in every engine, not with the Web Animations API: animations of the browser turn acrylic in a tile clear (Firefox while they run, Chromium for a moment after a drop). The motion is the one of WinJS, Microsoft's controls for Windows 8 apps: tiles move to new places in 367 ms, one after another 33 ms apart; a dragged tile grows to 1.05 and fades to 0.65 in 240 ms while the others shrink to 0.95, and everything settles in 500 ms on drop. With `prefers-reduced-motion: reduce` the same end states are set at once, with no motion. The layout with `strip="1"` is the cell-spanning layout of WinJS; the tests compare it with layouts recorded from WinJS.
 
+## Entrance and exit
+
+The entrance is chosen with the `--tile-entrance` custom property: `desktop`, `mobile`, or `none` (the default, which plays nothing by itself). It is inherited and read from the group's style, so a media query can switch it:
+
+```css
+ax-tile-group { --tile-entrance: desktop; }
+@media (max-width: 600px) { ax-tile-group { --tile-entrance: mobile; } }
+```
+
+With a variant set, the group plays it once, the first time it is visible (with an IntersectionObserver), and again after a launch is restored (see [Launch](#launch)). Each automatic play uses the variant the property says at that moment.
+
+`enter({ variant })` plays the entrance by hand and resolves when the last tile has arrived; `exit({ variant })` plays the matching exit and resolves when the last tile has gone. `variant` overrides the property; without it they use the property, and `desktop` when it is `none`. The tiles stay invisible after an exit until the next `enter()` or a re-layout. A drag or a keyboard move during an entrance or an exit first jumps it to its end state.
+
+A change in the middle of an entrance or an exit ends it at once, at its end state, and resolves its promise: a change of the places, the sizes or the children of the group (a resize that moves tiles included), or a change of the variant the property gives. The new layout or variant then applies as usual; a running animation is never switched from one variant to the other.
+
+**Desktop** is the entrance of the Windows 8 Start screen: each tile starts `--tile-enter-offset` to the right of its place, transparent, and moves to its place while it fades in. Tiles start one column after another, each after the one before it.
+
+* `--tile-enter-offset`: the distance, `225px`.
+* `--tile-enter-duration`: `1000ms`.
+* `--tile-enter-easing`: `cubic-bezier(0, 0.5, 0.5, 1)`, the one Windows 8 uses for the Start screen (`windowsEasing(54)` of `@ax-design/surface`).
+* `--tile-enter-stagger`: the delay between two columns, `33ms`. With `orientation="vertical"` it is between two rows.
+* `--tile-enter-delay`: the delay before the first column, `0ms`.
+* `--tile-exit-duration`: the fade of the exit, which does not move, `200ms`.
+
+**Mobile** is the turnstile of Windows Phone, after the Flutter implementation of the team: each tile turns 90 degrees about the left edge of the group, to face the viewer, while it fades in; the exit turns it away again. A tile starts at `tileY * 0.001714 + tileX * 0.00047 + random * 0.1` of the duration (a fraction, clamped to 0 to 0.9), so the tiles lower in the group come later, and those to the right come later when entering and earlier when exiting; `-0.00047` for the exit.
+
+* `--tile-turnstile-perspective`: `1000px`.
+* `--tile-turnstile-duration`: `600ms`.
+* `--tile-turnstile-easing`: `cubic-bezier(0.22, 1, 0.36, 1)`, easeOutQuint.
+
+Times are `ms` or `s`, lengths are `px`, and invalid values fall back to the defaults. The parameters are read when an animation starts.
+
+**Reduced motion**: with `prefers-reduced-motion: reduce`, `enter()` and `exit()` jump to their end state at once, and their promises resolve on the next frame.
+
+**For authors of children**: the group moves each child's transform, and sets its `z-index`. A child that is a surface (it has a `motion()` method, like `<ax-surface>`) gets its 3D turn and its opacity through `motion()`, never through a CSS 3D transform or `opacity` on its host: in Firefox no 3D transform may sit above acrylic, and an opacity on an ancestor makes it the backdrop root in every engine. Any other element gets them on its host, the turn in 3D with the origin at the left edge of the group. Set your own 3D or opacity on a surface's `motion()` only when the group does not run an entrance or a launch at that moment.
+
+## Launch
+
+When a tile is launched, the other tiles shrink toward the middle of the group and fade, and the launched tile is left as it is. The group listens to the bubbling `tilelaunchstart` event of the tile, and to `tilelaunchend`, which restores the other tiles at once and plays the entrance again when the group has an `entrance` attribute. A listener that cancels `tilelaunchstart` stops the launch. The group does not import `@ax-design/tile`: the events are fired by the launching tile, which is up to you (`@ax-design/tile` fires them).
+
+* `--tile-launch-exit-scale`: the scale of the others, `0.9`.
+* `--tile-launch-exit-duration`: `150ms`.
+
+## Start screen
+
+The background of the Start screen is the page's own, behind the groups, and the groups come in one after the other with a parallax: the second group starts later and moves further.
+
+```html
+<style>
+  body { background: url(start-background.jpg) center / cover; }
+  #back, #front { --tile-entrance: desktop; }
+  #back { --tile-enter-delay: 0ms; --tile-enter-offset: 225px; }
+  #front { --tile-enter-delay: 300ms; --tile-enter-offset: 90px; }
+</style>
+<ax-tile-group id="back"> ... </ax-tile-group>
+<ax-tile-group id="front"> ... </ax-tile-group>
+```
+
 ## Known issues
 
 * Dragging tiles onto each other to form groups is not there yet (see `grouping`).
@@ -171,6 +229,7 @@ Tiles move and fade by script, frame by frame, in every engine, not with the Web
 * 0.1.2: `drag="cross-slide"`, the touch gesture of Windows 8 for groups in a horizontal scroller.
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
 * 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves. A dropped tile stays above the others until it has landed, also when its opacity does not change. Tiles move and fade by script in every engine, so acrylic in them stays drawn.
+* Unreleased: `--tile-entrance` (desktop, mobile or none), `enter()`, `exit()`, and the launch of a tile (`tilelaunchstart` and `tilelaunchend`), see [Entrance and exit](#entrance-and-exit) and [Launch](#launch). A surface child now gets its drag opacity through `motion()`, not on its host.
 * Unreleased: `<ax-tile>` moved to `@ax-design/tile`. tile-group no longer defines `<ax-tile>` and exports no `AxTile`: register `@ax-design/tile` for it. `register()` now defines only `<ax-tile-group>`, not `<ax-surface>`; register `@ax-design/surface` yourself if your page needs it. The group observes the `columns` and `rows` of its children itself, so any child can change its size. `tileChanged()` is deprecated; it still lays the group out.
 
 ## Development
