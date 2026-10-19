@@ -23,9 +23,12 @@ describe('parseTime', () => {
 describe('readParams', () => {
     test('uses the defaults when nothing is set', () => {
         const p = readParams(style({}));
-        expect(p.enterOffset).toBe(80);
-        expect(p.enterDuration).toBe(300);
-        expect(p.enterFade).toBe(100);
+        expect(p.enterOffset).toBe(60);
+        expect(p.enterDuration).toBe(500);
+        expect(p.enterScale).toBe(0.8);
+        expect(p.enterScaleDuration).toBe(450);
+        expect(p.enterScaleEasing).toEqual([0.1, 0.9, 0.2, 1]);
+        expect(p.enterFade).toBe(120);
         expect(p.enterStagger).toBe(33);
         expect(p.enterDelay).toBe(0);
         expect(p.exitDuration).toBe(200);
@@ -33,7 +36,7 @@ describe('readParams', () => {
         expect(p.turnstileDuration).toBe(600);
         expect(p.launchScale).toBe(0.9);
         expect(p.launchDuration).toBe(100);
-        expect(p.enterEasing).toEqual([0, 0.5, 0.5, 1]);
+        expect(p.enterEasing).toEqual([0.17, 0.55, 0.3, 0.95]);
         expect(p.turnstileEasing).toEqual([0.22, 1, 0.36, 1]);
     });
 
@@ -50,7 +53,7 @@ describe('readParams', () => {
     test('takes 0 as a length, and a bad easing as the default', () => {
         const p = readParams(style({ '--tile-enter-offset': '0', '--tile-enter-easing': 'steps(4)' }));
         expect(p.enterOffset).toBe(0);
-        expect(p.enterEasing).toEqual([0, 0.5, 0.5, 1]);
+        expect(p.enterEasing).toEqual([0.17, 0.55, 0.3, 0.95]);
     });
 });
 
@@ -68,12 +71,14 @@ describe('the curves', () => {
     const p = readParams(style({}));
 
     test('a desktop tile starts offset and transparent, and ends in place', () => {
-        expect(enterDesktop(0, 0, p)).toEqual({ dx: 80, rotateY: 0, enter: 0 });
-        // It has faded in before it has arrived, as in Windows.
-        const faded = enterDesktop(100, 0, p);
+        expect(enterDesktop(0, 0, p)).toEqual({ dx: 60, scale: 0.8, rotateY: 0, enter: 0 });
+        // It has faded in before it has grown, and grown before it has arrived, as in Windows.
+        const faded = enterDesktop(120, 0, p);
         expect(faded.enter).toBe(1);
-        expect(faded.dx).toBeGreaterThan(1);
-        const end = enterDesktop(300, 0, p);
+        expect(faded.scale).toBeLessThan(1);
+        expect(1 - faded.scale).toBeLessThan(0.2 * (faded.dx / 60));
+        const end = enterDesktop(500, 0, p);
+        expect(end.scale).toBeCloseTo(1, 9);
         expect(end.dx).toBeCloseTo(0, 9);
         expect(end.enter).toBeCloseTo(1, 9);
         // A delayed tile waits.
@@ -87,7 +92,7 @@ describe('the curves', () => {
     });
 
     test('a turnstile turns from 90 degrees to 0 and back', () => {
-        expect(turnstile(0, 0, true, p)).toEqual({ dx: 0, rotateY: 90, enter: 0 });
+        expect(turnstile(0, 0, true, p)).toEqual({ dx: 0, scale: 1, rotateY: 90, enter: 0 });
         const end = turnstile(1, 0.3, true, p);
         expect(end.rotateY).toBeCloseTo(0, 9);
         expect(end.enter).toBeCloseTo(1, 9);

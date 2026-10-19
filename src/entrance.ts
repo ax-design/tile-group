@@ -14,6 +14,10 @@ export interface Params {
     // ms, of the move.
     enterDuration: number;
     enterEasing: Bezier;
+    // The scale a tile starts at, about its middle, and the ms and curve of its growth to 1.
+    enterScale: number;
+    enterScaleDuration: number;
+    enterScaleEasing: Bezier;
     // ms, of the fade in, linear.
     enterFade: number;
     // ms between two columns (rows, vertical).
@@ -31,27 +35,33 @@ export interface Params {
     launchDuration: number;
 }
 
-// The tile state at a moment: px to the right, degrees turned about the left edge of the group,
-// and opacity.
+// The tile state at a moment: px to the right, scale about its middle, degrees turned about the
+// left edge of the group, and opacity.
 export interface EntranceFrame {
     dx: number;
+    scale: number;
     rotateY: number;
     enter: number;
 }
 
-// Windows 8 Start screen: cubic-bezier(0, 0.5, 0.5, 1). Windows Phone turnstile: easeOutQuint.
-// The desktop numbers are fitted to a 60 fps recording of Windows 8.1: the move takes about 300 ms
-// from about 6% of the screen width (80 px on a 1366 px screen), and the fade about 100 ms.
-const DESKTOP_EASING: Bezier = [0, 0.5, 0.5, 1];
+// The desktop numbers are fitted, column by column, to a 60 fps recording of Windows 8.1, with
+// curves of the Windows animation theme: a tile grows from 0.8 with curve 4 in about 450 ms, moves
+// from about 3.75% of the screen width (60 px) with curve 61 in about 500 ms, and fades in, linear,
+// in about 120 ms. Windows Phone turnstile: easeOutQuint.
+const DESKTOP_EASING: Bezier = [0.17, 0.55, 0.3, 0.95];
+const DESKTOP_SCALE_EASING: Bezier = [0.1, 0.9, 0.2, 1];
 const TURNSTILE_EASING: Bezier = [0.22, 1, 0.36, 1];
 
 export function readParams(style: CSSStyleDeclaration): Params {
     const value = (name: string) => style.getPropertyValue(name).trim();
     return {
-        enterOffset: parseLengthOr(value('--tile-enter-offset'), 80),
-        enterDuration: parseTime(value('--tile-enter-duration'), 300),
+        enterOffset: parseLengthOr(value('--tile-enter-offset'), 60),
+        enterDuration: parseTime(value('--tile-enter-duration'), 500),
         enterEasing: parseEasingOr(value('--tile-enter-easing'), DESKTOP_EASING),
-        enterFade: parseTime(value('--tile-enter-fade'), 100),
+        enterScale: parseNumber(value('--tile-enter-scale'), 0.8),
+        enterScaleDuration: parseTime(value('--tile-enter-scale-duration'), 450),
+        enterScaleEasing: parseEasingOr(value('--tile-enter-scale-easing'), DESKTOP_SCALE_EASING),
+        enterFade: parseTime(value('--tile-enter-fade'), 120),
         enterStagger: parseTime(value('--tile-enter-stagger'), 33),
         enterDelay: parseTime(value('--tile-enter-delay'), 0),
         exitDuration: parseTime(value('--tile-exit-duration'), 200),
@@ -98,28 +108,29 @@ function progress(t: number, duration: number): number {
     return duration > 0 ? clamp01(t / duration) : 1;
 }
 
-// Desktop entrance: a tile starts `delay` ms after the start, and moves from enterOffset px to
-// the right while it fades in, faster than it moves.
+// Desktop entrance: a tile starts `delay` ms after the start; it moves from enterOffset px to the
+// right and grows from enterScale while it fades in. The fade is the fastest, the move the slowest.
 export function enterDesktop(t: number, delay: number, p: Params): EntranceFrame {
-    const e = bezierAt(p.enterEasing, progress(t - delay, p.enterDuration));
-    return { dx: p.enterOffset * (1 - e), rotateY: 0, enter: progress(t - delay, p.enterFade) };
+    const move = bezierAt(p.enterEasing, progress(t - delay, p.enterDuration));
+    const grow = bezierAt(p.enterScaleEasing, progress(t - delay, p.enterScaleDuration));
+    return { dx: p.enterOffset * (1 - move), scale: p.enterScale + (1 - p.enterScale) * grow, rotateY: 0, enter: progress(t - delay, p.enterFade) };
 }
 
-// The length of a desktop entrance of one tile: the longer of its move and its fade.
+// The length of a desktop entrance of one tile: the longest of its move, its growth and its fade.
 export function enterLength(p: Params): number {
-    return Math.max(p.enterDuration, p.enterFade);
+    return Math.max(p.enterDuration, p.enterScaleDuration, p.enterFade);
 }
 
 // Desktop exit: the tiles fade out, without moving.
 export function exitDesktop(t: number, p: Params): EntranceFrame {
-    return { dx: 0, rotateY: 0, enter: 1 - progress(t, p.exitDuration) };
+    return { dx: 0, scale: 1, rotateY: 0, enter: 1 - progress(t, p.exitDuration) };
 }
 
 // Mobile entrance and exit: the turnstile. `fraction` is the share of the duration that has
 // passed, `begin` the share at which the tile starts (see turnstileBegin).
 export function turnstile(fraction: number, begin: number, entering: boolean, p: Params): EntranceFrame {
     const e = bezierAt(p.turnstileEasing, clamp01((fraction - begin) / (1 - begin)));
-    return entering ? { dx: 0, rotateY: 90 * (1 - e), enter: e } : { dx: 0, rotateY: 90 * e, enter: 1 - e };
+    return entering ? { dx: 0, scale: 1, rotateY: 90 * (1 - e), enter: e } : { dx: 0, scale: 1, rotateY: 90 * e, enter: 1 - e };
 }
 
 // The share of the duration at which a tile starts its turn. Tiles lower in the group start

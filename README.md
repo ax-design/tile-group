@@ -176,12 +176,15 @@ With a variant set, the group plays it once, the first time it is visible (with 
 
 A change in the middle of an entrance or an exit ends it at once, at its end state, and resolves its promise: a change of the places, the sizes or the children of the group (a resize that moves tiles included), or a change of the variant the property gives. The new layout or variant then applies as usual; a running animation is never switched from one variant to the other.
 
-**Desktop** is the entrance of the Windows 8 Start screen: each tile starts `--tile-enter-offset` to the right of its place, transparent, and moves to its place while it fades in, faster than it moves. Tiles start one column after another, each after the one before it. The defaults are fitted to a 60 fps recording of Windows 8.1.
+**Desktop** is the entrance of the Windows 8 Start screen: each tile starts `--tile-enter-offset` to the right of its place, smaller and transparent, and moves to its place while it grows and fades in. The fade is the fastest, the move the slowest. Tiles start one column after another, each after the one before it. The defaults are fitted, column by column, to a 60 fps recording of Windows 8.1, with curves of the Windows animation theme (`windowsEasing(id)` of `@ax-design/surface`).
 
-* `--tile-enter-offset`: the distance, `80px` (about 6% of the width of the screen in the recording).
-* `--tile-enter-duration`: the move, `300ms`.
-* `--tile-enter-fade`: the fade in, linear, `100ms`.
-* `--tile-enter-easing`: `cubic-bezier(0, 0.5, 0.5, 1)`, the one Windows 8 uses for the Start screen (`windowsEasing(54)` of `@ax-design/surface`).
+* `--tile-enter-offset`: the distance, `60px` (about 3.75% of the width of the screen in the recording).
+* `--tile-enter-duration`: the move, `500ms`.
+* `--tile-enter-easing`: the curve of the move, `cubic-bezier(0.17, 0.55, 0.3, 0.95)` (curve 61).
+* `--tile-enter-scale`: the scale a tile starts at, about its middle, `0.8`.
+* `--tile-enter-scale-duration`: the growth to full size, `450ms`.
+* `--tile-enter-scale-easing`: the curve of the growth, `cubic-bezier(0.1, 0.9, 0.2, 1)` (curve 4).
+* `--tile-enter-fade`: the fade in, linear, `120ms`.
 * `--tile-enter-stagger`: the delay between two columns, `33ms`. With `orientation="vertical"` it is between two rows.
 * `--tile-enter-delay`: the delay before the first column, `0ms`.
 * `--tile-exit-duration`: the fade of the exit, which does not move, `200ms`.

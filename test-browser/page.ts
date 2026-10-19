@@ -684,6 +684,8 @@ async function run() {
         if (!reduced) {
             await wait(300);
             const m = motionOf(byId('en1'));
+            const grown = /scale\(([\d.]+)\)/.exec(byId('en1').style.transform);
+            check('desktop enter: midway a tile grows, on its host, between 0.8 and 1', !!grown && +grown[1] > 0.8 && +grown[1] < 1, byId('en1').style.transform);
             check('desktop enter: midway a surface fades in, with its host 2D and opaque', !!m && m.opacity! > 0 && m.opacity! < 1 && getComputedStyle(byId('en1')).opacity === '1' && !/matrix3d/.test(getComputedStyle(byId('en1')).transform), `${JSON.stringify(m)} ${getComputedStyle(byId('en1')).transform}`);
         }
         await entering;
@@ -757,7 +759,8 @@ async function run() {
         // Under reduced motion the entrance it starts is at its end at once.
         check('tilelaunchend puts the launched tile back in line', byId('en1').style.zIndex === '', byId('en1').style.zIndex);
         check('tilelaunchend restores the other groups at once too', Array.from(byId('ep').children).every((t) => !/scale/.test((t as HTMLElement).style.transform)), Array.from(byId('ep').children).map((t) => (t as HTMLElement).style.transform).join(' | '));
-        check('tilelaunchend restores the others at once, and plays the entrance', ['en2', 'en3', 'en4'].every((id) => !/scale/.test(byId(id).style.transform)) && opacityOf(byId('en2')) === (reduced ? 1 : 0), ['en2', 'en3', 'en4'].map((id) => byId(id).style.transform + ' ' + opacityOf(byId(id))).join(' | '));
+        // The launch's shrink (0.9) is gone; the entrance starts again from its own scale.
+        check('tilelaunchend restores the others at once, and plays the entrance', ['en2', 'en3', 'en4'].every((id) => !/scale\(0\.9\)/.test(byId(id).style.transform)) && opacityOf(byId('en2')) === (reduced ? 1 : 0), ['en2', 'en3', 'en4'].map((id) => byId(id).style.transform + ' ' + opacityOf(byId(id))).join(' | '));
         await wait(1500);
         check('and the entrance ends at rest', rest(en), '');
 

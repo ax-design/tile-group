@@ -140,8 +140,9 @@ interface Placed {
 // What the entrance, the launch and the drag add to the drawing of a tile (see writeTile). Each
 // one writes its own fields; the opacity is their product.
 interface Look {
-    // Entrance (desktop): px to the right of the place.
+    // Entrance (desktop): px to the right of the place, and scale about the middle of the tile.
     dx: number;
+    grow: number;
     // Entrance (mobile): degrees turned about the left edge of the group, and the perspective.
     rotateY: number;
     perspective: number;
@@ -164,6 +165,7 @@ interface Look {
 interface Hold {
     kind: 'enter' | 'exit';
     dx: number;
+    grow: number;
     rotateY: number;
     perspective: number;
     enter: number;
@@ -645,6 +647,7 @@ export class AxTileGroup extends HTMLElement {
             } else frame = exitDesktop(t, p);
             const look = this.lookOf(tile);
             look.dx = frame.dx;
+            look.grow = frame.scale;
             look.rotateY = frame.rotateY;
             look.perspective = p.turnstilePerspective;
             look.enter = frame.enter;
@@ -687,7 +690,7 @@ export class AxTileGroup extends HTMLElement {
     private lookOf(tile: HTMLElement): Look {
         let look = this.looks.get(tile);
         if (!look) {
-            look = { dx: 0, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
+            look = { dx: 0, grow: 1, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
             setEntrance(look, this.hold);
             this.looks.set(tile, look);
         }
@@ -812,7 +815,8 @@ export class AxTileGroup extends HTMLElement {
         const look = this.lookOf(tile);
         let x = at.x + look.dx;
         let y = at.y;
-        let scale = at.scale;
+        // The growth of the entrance is about the middle of the tile, the transform origin.
+        let scale = at.scale * look.grow;
         if (look.launch !== 1) {
             // Scaled about the middle of the screen (see Launch). The translate below assumes the
             // transform origin is the middle of the tile, which is the default.
@@ -1282,12 +1286,14 @@ function transformOf(x: number, y: number, scale: number): string {
 // The state of a hold: what the tiles show between an entrance and the next one.
 function holdFor(kind: 'enter' | 'exit', variant: EntranceVariant, p: Params): Hold {
     const mobile = variant === 'mobile';
-    return { kind, dx: kind === 'enter' && !mobile ? p.enterOffset : 0, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, enter: 0 };
+    const desktopEnter = kind === 'enter' && !mobile;
+    return { kind, dx: desktopEnter ? p.enterOffset : 0, grow: desktopEnter ? p.enterScale : 1, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, enter: 0 };
 }
 
 // The entrance fields of a look: those of the hold, or none.
 function setEntrance(look: Look, hold: Hold | null) {
     look.dx = hold ? hold.dx : 0;
+    look.grow = hold ? hold.grow : 1;
     look.rotateY = hold ? hold.rotateY : 0;
     look.perspective = hold ? hold.perspective : DEFAULT_PERSPECTIVE;
     look.enter = hold ? hold.enter : 1;
