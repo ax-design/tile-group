@@ -119,5 +119,20 @@
   <div id="ep3" columns="4" rows="2" style="background: #99a">3</div>
   <div id="ep4" columns="2" rows="2" style="background: #99a">4</div>
 </ax-tile-group>
+<!-- A boundary: "sa" (eight columns, two bands) and "sb" side by side, "sb" 60 px lower. -->
+<ax-tile-bound id="sbound" style="display: flex; align-items: flex-start">
+  <ax-tile-group id="sa" style="margin-right: 20px">
+    <ax-tile id="sa1" columns="2" rows="2" layers="fill">1</ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill">2</ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill">3</ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill">4</ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill">5</ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill">6</ax-tile>
+  </ax-tile-group>
+  <div><ax-tile-group id="sb" style="margin-top: 60px">
+    <ax-tile id="sb1" columns="2" rows="2" layers="fill">1</ax-tile>
+    <ax-tile columns="2" rows="2" layers="fill">2</ax-tile>
+  </ax-tile-group></div>
+</ax-tile-bound>
 <script type="module" src="./page.ts"></script>
 </body></html>

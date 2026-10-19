@@ -188,12 +188,13 @@ A change in the middle of an entrance or an exit ends it at once, at its end sta
 * `--tile-enter-scale-easing`: the curve of the growth, `cubic-bezier(0.1, 0.9, 0.2, 1)` (curve 4).
 * `--tile-enter-fade`: the fade in, linear, `133ms`.
 * `--tile-enter-stagger`: the delay between two bands, `35ms`.
-* `--tile-enter-delay`: the delay before the first band, `0ms`.
+* `--tile-enter-delay`: the delay before the first band, `0ms`. In an `<ax-tile-bound>` (see [Start screen](#start-screen)), set it once on the boundary: it is inherited, and each group reads it as its own.
 * `--tile-exit-duration`: the fade of the exit, which does not move, `200ms`.
 
-**Mobile** is the turnstile of Windows Phone, after the Flutter implementation of the team: each tile turns 90 degrees about the left edge of the group, to face the viewer, while it fades in; the exit turns it away again. A tile starts at `tileY * 0.001714 + tileX * 0.00047 + random * 0.1` of the duration (a fraction, clamped to 0 to 0.9), so the tiles lower in the group come later, and those to the right come later when entering and earlier when exiting; `-0.00047` for the exit.
+**Mobile** is the turnstile of Windows Phone, after the Flutter implementation of the team: each tile turns 90 degrees, to face the viewer, while it fades in; the exit turns it away again. Every tile of every group turns about the same vertical axis, at the left edge of the viewport, and they share one vanishing point, at the middle of the viewport's height, as in WinJS (`collectTurnstileTransformOrigins`): the turn of a tile is about that axis from its resting place, whatever group it is in and wherever the group sits. A tile starts at `tileY * 0.001714 + tileX * 0.00047 + random * 0.1` of the duration (a fraction, clamped to 0 to 0.9), so the tiles lower in the group come later, and those to the right come later when entering and earlier when exiting; `-0.00047` for the exit.
 
 * `--tile-turnstile-perspective`: `1000px`.
+* `--tile-turnstile-origin`: how far to the left of the viewport's left edge the axis of the turn is, a length, `0px`. WinJS uses `40px`.
 * `--tile-turnstile-duration`: `600ms`.
 * `--tile-turnstile-easing`: `cubic-bezier(0.22, 1, 0.36, 1)`, easeOutQuint.
 
@@ -201,7 +202,7 @@ Times are `ms` or `s`, lengths are `px`, and invalid values fall back to the def
 
 **Reduced motion**: with `prefers-reduced-motion: reduce`, `enter()` and `exit()` jump to their end state at once, and their promises resolve on the next frame.
 
-**For authors of children**: the group moves each child's transform, and sets its `z-index`. A child that is a surface (it has a `motion()` method, like `<ax-surface>`) gets its 3D turn and its opacity through `motion()`, never through a CSS 3D transform or `opacity` on its host: in Firefox no 3D transform may sit above acrylic, and an opacity on an ancestor makes it the backdrop root in every engine. Any other element gets them on its host, the turn in 3D with the origin at the left edge of the group. Set your own 3D or opacity on a surface's `motion()` only when the group does not run an entrance or a launch at that moment.
+**For authors of children**: the group moves each child's transform, and sets its `z-index`. A child that is a surface (it has a `motion()` method, like `<ax-surface>`) gets its 3D turn and its opacity through `motion()`, never through a CSS 3D transform or `opacity` on its host: in Firefox no 3D transform may sit above acrylic, and an opacity on an ancestor makes it the backdrop root in every engine. Any other element gets them on its host, the turn in 3D with its `transform-origin` on the axis of the turnstile. Set your own 3D or opacity on a surface's `motion()` only when the group does not run an entrance or a launch at that moment.
 
 ## Launch
 
@@ -214,19 +215,22 @@ The launched tile is raised above the others (`z-index`) until `tilelaunchend`, 
 
 ## Start screen
 
-The background of the Start screen is the page's own, behind the groups. As in Windows 8.1, it comes in first (about 120 ms), then the bands of all the groups, 35 ms apart, as if they were one: a group adds no pause of its own, so the second group starts one stagger after the last band of the first.
+The background of the Start screen is the page's own, behind the groups. As in Windows 8.1, it comes in first (about 120 ms), then the bands of all the groups, 35 ms apart, as if they were one: a group adds no pause of its own, so the second group starts one stagger after the last band of the first, and every band grows about the middle of all the groups across them (the vertical middle of the tile area), not of its own group.
+
+`<ax-tile-bound>` couples the groups that way. It is a boundary, like `<ax-reveal-bound>` of reveal-highlight: it draws nothing and has no styles of its own, and the groups inside it, at any depth and through shadow roots, find it when they connect. The groups whose desktop entrance starts within 50 ms of each other form a wave, as those started by the same scroll into view or the restore after a launch do. Within a wave, the groups are taken in order along their axis (by their left edge, or their top when vertical; document order for equal edges), and the bands of a group go on from those of the groups before it: a group has as many bands as its columns (rows, vertical) need, in bands of its own `--tile-enter-band`. A group that enters later, scrolled into view or added, starts its own wave at the first band. The boundary measures the groups of a wave once, and again when the wave, the window size or the layout of one of them changes, not at every frame. The turnstile does not use the boundary. Without a boundary, each group counts its bands from the first and grows about its own middle.
 
 ```html
 <style>
   body { background: url(start-background.jpg) center / cover; }
-  #back, #front { --tile-entrance: desktop; }
-  #back { --tile-enter-delay: 120ms; }
-  /* After the two bands (four columns) of the first group: 120 + 2 x 35 ms. */
-  #front { --tile-enter-delay: 190ms; }
+  ax-tile-bound { display: flex; --tile-entrance: desktop; --tile-enter-delay: 120ms; }
 </style>
-<ax-tile-group id="back"> ... </ax-tile-group>
-<ax-tile-group id="front"> ... </ax-tile-group>
+<ax-tile-bound>
+  <ax-tile-group> ... </ax-tile-group>
+  <ax-tile-group> ... </ax-tile-group>
+</ax-tile-bound>
 ```
+
+`register()` defines `<ax-tile-bound>` with `<ax-tile-group>`.
 
 ## Known issues
 
@@ -239,6 +243,7 @@ The background of the Start screen is the page's own, behind the groups. As in W
 * 0.1.3: `orientation="vertical"` and `--tile-columns`, for groups like the ones of the Windows 10 Start menu.
 * 0.1.4: `--tile-drag-opacity`, the opacity of a dragged tile; set it to 1 for tiles with acrylic. A tile whose opacity stays the same runs no opacity animation: one from 1 to 1 turned the acrylic in it clear while it was lifted and dropped. In cross-slide, a held mouse no longer lifts the tile: it drags only once it moves. A dropped tile stays above the others until it has landed, also when its opacity does not change. Tiles move and fade by script in every engine, so acrylic in them stays drawn.
 * Unreleased: `--tile-entrance` (desktop, mobile or none), `enter()`, `exit()`, and the launch of a tile (`tilelaunchstart` and `tilelaunchend`), see [Entrance and exit](#entrance-and-exit) and [Launch](#launch). A surface child now gets its drag opacity through `motion()`, not on its host.
+* Unreleased: `<ax-tile-bound>` (`AxTileBoundary`), which runs the desktop entrances of the groups in it as one, see [Start screen](#start-screen); `register()` defines it too. The turnstile now turns every tile about one vertical axis at the left edge of the viewport, with one vanishing point at the middle of its height, and `--tile-turnstile-origin` moves that axis; it turned about the left edge of each group before, with a vanishing point per tile.
 * Unreleased: `<ax-tile>` moved to `@ax-design/tile`. tile-group no longer defines `<ax-tile>` and exports no `AxTile`: register `@ax-design/tile` for it. `register()` now defines only `<ax-tile-group>`, not `<ax-surface>`; register `@ax-design/surface` yourself if your page needs it. The group observes the `columns` and `rows` of its children itself, so any child can change its size. `tileChanged()` is deprecated; it still lays the group out.
 
 ## Development

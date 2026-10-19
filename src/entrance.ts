@@ -34,6 +34,8 @@ export interface Params {
     // ms.
     exitDuration: number;
     turnstilePerspective: number;
+    // px to the left of the left edge of the viewport, where the vertical axis of the turn is.
+    turnstileOrigin: number;
     // ms.
     turnstileDuration: number;
     turnstileEasing: Bezier;
@@ -43,7 +45,7 @@ export interface Params {
 }
 
 // The tile state at a moment: px to the right, scale about its middle, degrees turned about the
-// left edge of the group, and opacity.
+// axis of the turnstile (see turnstileOrigin), and opacity.
 export interface EntranceFrame {
     dx: number;
     scale: number;
@@ -79,6 +81,7 @@ export function readParams(style: CSSStyleDeclaration): Params {
         enterDelay: parseTime(value('--tile-enter-delay'), 0),
         exitDuration: parseTime(value('--tile-exit-duration'), 200),
         turnstilePerspective: parseLengthOr(value('--tile-turnstile-perspective'), 1000),
+        turnstileOrigin: parseLengthOr(value('--tile-turnstile-origin'), 0),
         turnstileDuration: parseTime(value('--tile-turnstile-duration'), 600),
         turnstileEasing: parseEasingOr(value('--tile-turnstile-easing'), TURNSTILE_EASING),
         launchScale: parseNumber(value('--tile-launch-exit-scale'), 0.9),
@@ -152,6 +155,14 @@ export function enterLength(p: Params): number {
 // Desktop exit: the tiles fade out, without moving.
 export function exitDesktop(t: number, p: Params): EntranceFrame {
     return { dx: 0, scale: 1, rotateY: 0, enter: 1 - progress(t, p.exitDuration) };
+}
+
+// The origin of a tile's turn, in its own px, from its resting place (`left`, `top`, in px of the
+// viewport): every tile turns about the same vertical line, `origin` px left of the viewport, with
+// one vanishing point at the middle of the viewport's height, as WinJS does
+// (collectTurnstileTransformOrigins, with 40 px).
+export function turnstileOrigin(left: number, top: number, origin: number, viewportHeight: number): { x: number; y: number } {
+    return { x: -(origin + left), y: viewportHeight / 2 - top };
 }
 
 // Mobile entrance and exit: the turnstile. `fraction` is the share of the duration that has

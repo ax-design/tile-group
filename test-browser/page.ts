@@ -733,9 +733,14 @@ async function run() {
         const turning = en.enter({ variant: 'mobile' });
         if (!reduced) {
             await wait(300);
-            const x4 = cellsOf(en)[3][0] * STEP;
+            // Every tile turns about the left edge of the viewport, with the vanishing point at the
+            // middle of its height: the origin, in the tile's own px, from its resting place.
+            const box = en.getBoundingClientRect();
+            const [c4, r4] = cellsOf(en)[3];
+            const x4 = c4 * STEP;
+            const top4 = box.top + r4 * STEP;
             const m = motionOf(byId('en4'));
-            check('mobile enter: midway a surface turns about the left edge of the group', !!m && m.rotateY! > 0 && m.rotateY! < 90 && Math.abs(m.originX! + x4) < 0.01 && x4 > 0, `${JSON.stringify(m)} x=${x4}`);
+            check('mobile enter: midway a surface turns about the left edge of the viewport', !!m && m.rotateY! > 0 && m.rotateY! < 90 && Math.abs(m.originX! + (box.left + x4)) < 0.05 && Math.abs(m.originY! - (innerHeight / 2 - top4)) < 0.05 && x4 > 0, `${JSON.stringify(m)} left=${box.left + x4} top=${top4}`);
             check('mobile enter: no surface has a 3D transform on its host', enTiles.every((id) => !/matrix3d/.test(getComputedStyle(byId(id)).transform)), enTiles.map((id) => getComputedStyle(byId(id)).transform).join(' | '));
         }
         await turning;
@@ -746,8 +751,12 @@ async function run() {
             await wait(300);
             const p3 = byId('ep3');
             const style = getComputedStyle(p3);
-            const x3 = cellsOf(ep)[2][0] * STEP;
-            check('mobile enter of a plain element: a 3D turn on its host, about the left edge', /matrix3d/.test(style.transform) && Math.abs(parseFloat(style.transformOrigin) + x3) < 0.01, `${style.transform} ${style.transformOrigin}`);
+            const box = ep.getBoundingClientRect();
+            const [c3, r3] = cellsOf(ep)[2];
+            const origin = style.transformOrigin.split(' ').map(parseFloat);
+            const left3 = box.left + c3 * STEP;
+            const top3 = box.top + r3 * STEP;
+            check('mobile enter of a plain element: a 3D turn on its host, about the left edge of the viewport', /matrix3d/.test(style.transform) && Math.abs(origin[0] + left3) < 0.05 && Math.abs(origin[1] - (innerHeight / 2 - top3)) < 0.05, `${style.transform} ${style.transformOrigin} left=${left3} top=${top3}`);
         }
         await turningPlain;
         check('mobile enter of a plain element ends at rest', rest(ep) && getComputedStyle(byId('ep3')).transformOrigin !== '', getComputedStyle(byId('ep3')).transformOrigin);
@@ -760,6 +769,8 @@ async function run() {
 
         // 13f. Launch: the others shrink toward the middle of the screen and fade, in this group and
         // in every other group of the page; the launched tile stays. A canceled launch changes nothing, and tilelaunchend restores the group at once.
+        // The resting cells, read before the shrink moves the tiles.
+        const restCells = cellsOf(en);
         launch(byId('en1'));
         await wait(300);
         {
@@ -767,7 +778,7 @@ async function run() {
             const cx = window.innerWidth / 2 - box.left;
             const cy = window.innerHeight / 2 - box.top;
             const e2 = byId('en2') as HTMLElement;
-            const [c2, r2] = cellsOf(en)[1];
+            const [c2, r2] = restCells[1];
             const tr = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\((-?[\d.]+)\)/.exec(e2.style.transform);
             const wantX = cx + 0.9 * (c2 * STEP - cx) - 0.1 * (e2.offsetWidth / 2);
             const wantY = cy + 0.9 * (r2 * STEP - cy) - 0.1 * (e2.offsetHeight / 2);
@@ -901,6 +912,51 @@ async function run() {
         await frames(3);
         await wait(300);
         check('and the group is at rest after both', rest(en), '');
+    }
+
+    // 14. <ax-tile-bound>: the desktop entrances of its groups run as one. "sa" has two bands, so
+    // the bands of "sb" go on after them, and every band grows about the middle of both groups.
+    {
+        const bound = byId('sbound');
+        const sa = byId('sa') as AxTileGroup;
+        const sb = byId('sb') as AxTileGroup;
+        check('boundary: <ax-tile-bound> is defined', customElements.get('ax-tile-bound') === pkg.AxTileBoundary, '');
+        if (!reduced) {
+            // A long stagger, so the bands are far apart. The fade is linear over 1000 ms here, so
+            // the difference of the opacities of two tiles is the difference of their onsets.
+            bound.style.setProperty('--tile-enter-stagger', '200ms');
+            bound.scrollIntoView({ block: 'start' });
+            const both = Promise.all([sa.enter({ variant: 'desktop' }), sb.enter({ variant: 'desktop' })]);
+            await wait(600);
+            const lag = (opacityOf(byId('sa1')) - opacityOf(byId('sb1'))) * 1000;
+            check('boundary: the first band of the second group starts the bands of the first after it', Math.abs(lag - 2 * 200) < 20, `${Math.round(lag)} ms, want 400`);
+            await both;
+            check('boundary: the entrance ends at rest', rest(sa) && rest(sb), '');
+
+            // One band at a time again, with no stagger: every band at the same scale. The two
+            // groups scale about one middle, so the spacing of their tiles across is s times the
+            // one at rest (each about its own middle it would stay 60 px apart more).
+            bound.style.setProperty('--tile-enter-stagger', '0ms');
+            const restDy = center(byId('sb1')).y - center(byId('sa1')).y;
+            const again = Promise.all([sa.enter({ variant: 'desktop' }), sb.enter({ variant: 'desktop' })]);
+            await wait(50);
+            const g = /scale\(([\d.]+)\)/.exec(byId('sa1').style.transform);
+            const s = g ? +g[1] : 1;
+            const midDy = center(byId('sb1')).y - center(byId('sa1')).y;
+            check('boundary: the bands of both groups grow about one middle', restDy > 50 && s < 0.95 && Math.abs(midDy - s * restDy) < 1, `spacing ${midDy.toFixed(2)}, want ${(s * restDy).toFixed(2)} (s ${s}, rest ${restDy.toFixed(2)})`);
+            await again;
+
+            // A group that enters later starts a wave of its own, at band 0.
+            bound.style.setProperty('--tile-enter-stagger', '200ms');
+            const first = sa.enter({ variant: 'desktop' });
+            await wait(120);
+            const later = sb.enter({ variant: 'desktop' });
+            await wait(150);
+            check('boundary: a group that enters later starts at band 0', opacityOf(byId('sb1')) > 0, String(opacityOf(byId('sb1'))));
+            await Promise.all([first, later]);
+            bound.style.removeProperty('--tile-enter-stagger');
+            check('boundary: and both end at rest', rest(sa) && rest(sb), '');
+        }
     }
 
     return { userAgent: navigator.userAgent, checks };

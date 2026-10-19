@@ -3,8 +3,11 @@
 import { registerProperties } from '@ax-design/typed-om';
 import type { PropertySpec } from '@ax-design/typed-om';
 import { AxTileGroup } from './group.js';
+import { AxTileBoundary } from './boundary.js';
 
 export { AxTileGroup } from './group.js';
+export { AxTileBoundary, bandCount, bandOffsets, spanMiddle } from './boundary.js';
+export type { BoundaryMember, WavePlace } from './boundary.js';
 export { tileSpan } from './tile.js';
 export { layoutTiles } from './layout.js';
 export type { LayoutOptions, LayoutResult, Placement, TileSpan } from './layout.js';
@@ -21,11 +24,13 @@ export const TILE_GROUP_PROPERTIES: PropertySpec[] = [length('--tile-cell-width'
 
 let registered = false;
 
-// Defines <ax-tile-group>. Safe to call more than once. The group uses the services of
+// Defines <ax-tile-bound> and <ax-tile-group>, the boundary first, so a group that upgrades
+// finds its boundary already upgraded. Safe to call more than once. The group uses the services of
 // @ax-design/surface but defines none of its elements.
 export function register(): void {
     if (registered) return;
     registered = true;
     registerProperties(TILE_GROUP_PROPERTIES);
+    if (!customElements.get(AxTileBoundary.ElementName)) customElements.define(AxTileBoundary.ElementName, AxTileBoundary);
     if (!customElements.get(AxTileGroup.ElementName)) customElements.define(AxTileGroup.ElementName, AxTileGroup);
 }

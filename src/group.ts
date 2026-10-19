@@ -42,15 +42,18 @@
 // The entrance and exit (enter(), exit()) and the launch of a tile (tilelaunchstart and
 // tilelaunchend) are drawn by writeTile(), the one writer of a tile's transform, opacity and
 // turn. A surface gets its turn and its opacity through motion(), a plain element on its host.
+// In an <ax-tile-bound> (see boundary.ts) the desktop entrances of the groups run as one.
 import { services } from '@ax-design/surface';
 import type { MotionState } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
-import { bandShift, clamp01, enterDesktop, enterLength, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin } from './entrance.js';
+import { bandShift, clamp01, enterDesktop, enterLength, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin, turnstileOrigin } from './entrance.js';
 import type { EntranceVariant, EntranceFrame, Params } from './entrance.js';
 import { layoutTiles } from './layout.js';
 import type { LayoutResult } from './layout.js';
 import { dropTarget, keyboardTarget, moveIndex } from './reorder.js';
 import type { Direction } from './reorder.js';
+import { bandCount, closestBoundary } from './boundary.js';
+import type { AxTileBoundary } from './boundary.js';
 import { tileSpan } from './tile.js';
 
 const REPOSITION_MS = 367;
@@ -144,9 +147,12 @@ interface Look {
     dx: number;
     dy: number;
     grow: number;
-    // Entrance (mobile): degrees turned about the left edge of the group, and the perspective.
+    // Entrance (mobile): degrees turned, the perspective, and the origin of the turn in the tile's
+    // own px (see turnstileOrigin).
     rotateY: number;
     perspective: number;
+    originX: number;
+    originY: number;
     // Opacity of the entrance and the exit.
     enter: number;
     // Launch of another tile: scale about the middle of the group, and its opacity.
@@ -170,6 +176,8 @@ interface Hold {
     grow: number;
     rotateY: number;
     perspective: number;
+    // px left of the viewport, the axis of the turn (--tile-turnstile-origin).
+    origin: number;
     enter: number;
 }
 
@@ -246,6 +254,12 @@ export class AxTileGroup extends HTMLElement {
     private entered = false;
     // The variant of --tile-entrance as the group last read it (see styleTarget).
     private seenVariant: EntranceVariant | null = null;
+    // The <ax-tile-bound> around the group, which couples the desktop entrances of its groups;
+    // the extent of the layout along the group, in cells; and the band size of the last desktop
+    // entrance, in cells.
+    private boundary: AxTileBoundary | null = null;
+    private extent = 0;
+    private bandSize = DEFAULT_STRIP;
 
     // The words said after a move, for screen readers: position is 1-based, count the tiles. Assign
     // a function to say them in another language.
@@ -289,6 +303,8 @@ export class AxTileGroup extends HTMLElement {
             this.root.appendChild(this.live);
         }
         services().triggers.add(this, this.styleTarget);
+        this.boundary = closestBoundary(this);
+        if (this.boundary) this.boundary.add(this);
         this.layout(false);
         this.seenVariant = this.entranceVariant();
         this.watchEntrance();
@@ -339,6 +355,16 @@ export class AxTileGroup extends HTMLElement {
         this.endLaunch();
         if (this.animFrame) cancelAnimationFrame(this.animFrame);
         this.animFrame = 0;
+        if (this.boundary) this.boundary.delete(this);
+        this.boundary = null;
+    }
+
+    /**
+     * For <ax-tile-bound>: the axis of the group, and the bands of its desktop entrance.
+     * @internal
+     */
+    boundaryInfo(): { vertical: boolean; bands: number } {
+        return { vertical: this.vertical, bands: bandCount(this.extent, this.bandSize) };
     }
 
     attributeChangedCallback(name: string) {
@@ -515,6 +541,9 @@ export class AxTileGroup extends HTMLElement {
         else if (this.ownHeight) s.height = '';
         this.ownWidth = width !== null;
         this.ownHeight = height !== null;
+        // The boundary measures the wave of the group again: its size or its bands may have changed.
+        this.extent = this.vertical ? result.rows : result.columns;
+        if (this.boundary) this.boundary.changed(this);
         let moved = 0;
         order.forEach((tile, i) => {
             const span = tileSpan(tile);
@@ -605,6 +634,14 @@ export class AxTileGroup extends HTMLElement {
         // The one in progress ends where it is, and its promise resolves.
         this.finishRun();
         const params = readParams(getComputedStyle(this));
+        // In a boundary, a desktop entrance joins the wave of the entrances that start with it; any
+        // other run leaves it.
+        const desktopEnter = kind === 'enter' && variant === 'desktop' && !reducedMotion();
+        if (desktopEnter) this.bandSize = params.enterBand || this.strip;
+        if (this.boundary) {
+            if (desktopEnter) this.boundary.join(this, performance.now());
+            else this.boundary.leave(this);
+        }
         // The user wants no motion: the end state at once, and the promise on the next frame.
         if (reducedMotion()) {
             this.hold = kind === 'exit' ? holdFor(kind, variant, params) : null;
@@ -638,24 +675,35 @@ export class AxTileGroup extends HTMLElement {
         const vertical = this.vertical;
         const step = vertical ? m.cellHeight + m.gap : m.cellWidth + m.gap;
         const desktopEnter = run.variant !== 'mobile' && run.kind === 'enter';
-        const box = desktopEnter ? this.getBoundingClientRect() : null;
+        const mobile = run.variant === 'mobile';
+        // One layout read per frame: the middle of the viewport (desktop), the origins of the turns
+        // (mobile).
+        const box = desktopEnter || mobile ? this.getBoundingClientRect() : null;
         const viewport = vertical ? window.innerHeight : window.innerWidth;
         const center = box ? viewport / 2 - (vertical ? box.top : box.left) : 0;
-        const across = vertical ? this.clientWidth / 2 : this.clientHeight / 2;
+        // In a boundary, the bands go on from those of the groups before this one in the wave, and
+        // grow about the middle of the whole wave across the axis (see AxTileBoundary).
+        const place = desktopEnter && this.boundary ? this.boundary.place(this) : null;
+        const across = place ? place.across : vertical ? this.clientWidth / 2 : this.clientHeight / 2;
+        const offset = place ? place.offset : 0;
         const bandSize = p.enterBand || this.strip;
         for (const tile of this.tiles) {
             const at = this.shown.get(tile);
             if (!at) continue;
             let frame: EntranceFrame;
-            if (run.variant === 'mobile') {
+            if (mobile) {
                 const begin = turnstileBegin(at.x, at.y, run.kind === 'enter', run.randoms.get(tile) || 0);
                 frame = turnstile(run.duration > 0 ? t / run.duration : 1, begin, run.kind === 'enter', p);
+                const origin = turnstileOrigin(box!.left + at.x, box!.top + at.y, p.turnstileOrigin, window.innerHeight);
+                const look = this.lookOf(tile);
+                look.originX = origin.x;
+                look.originY = origin.y;
             } else if (desktopEnter) {
                 // The band of the tile sets its delay, and it grows as one picture with the other
                 // tiles of the band: about the middle of the band along the group, and the middle of
-                // the group across it.
+                // the group (or of the wave) across it.
                 const band = Math.floor(Math.round((vertical ? at.y : at.x) / step) / bandSize);
-                const delay = p.enterDelay + band * p.enterStagger;
+                const delay = p.enterDelay + (offset + band) * p.enterStagger;
                 total = Math.max(total, delay + run.duration);
                 const middle = band * bandSize * step + (bandSize * step - m.gap) / 2;
                 frame = enterDesktop(t, delay, bandShift(middle, center, viewport, p), p);
@@ -709,8 +757,19 @@ export class AxTileGroup extends HTMLElement {
 
     // Draws the state of the hold (or none) on every tile.
     private showHold() {
+        const hold = this.hold;
+        // A turned hold (a waiting turnstile, or the end of its exit) turns about the axis of the
+        // turnstile too, from the resting places.
+        const box = hold && hold.rotateY ? this.getBoundingClientRect() : null;
         for (const tile of this.tiles) {
-            setEntrance(this.lookOf(tile), this.hold);
+            const look = this.lookOf(tile);
+            setEntrance(look, hold);
+            const at = this.shown.get(tile);
+            if (box && hold && at) {
+                const origin = turnstileOrigin(box.left + at.x, box.top + at.y, hold.origin, window.innerHeight);
+                look.originX = origin.x;
+                look.originY = origin.y;
+            }
             this.writeTile(tile);
         }
     }
@@ -719,7 +778,7 @@ export class AxTileGroup extends HTMLElement {
     private lookOf(tile: HTMLElement): Look {
         let look = this.looks.get(tile);
         if (!look) {
-            look = { dx: 0, dy: 0, grow: 1, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
+            look = { dx: 0, dy: 0, grow: 1, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, originX: 0, originY: 0, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
             setEntrance(look, this.hold);
             this.looks.set(tile, look);
         }
@@ -837,7 +896,8 @@ export class AxTileGroup extends HTMLElement {
     // move in progress); the look adds the entrance, the launch and the drag fade. A surface gets
     // its turn and its opacity through motion(), and its host only the 2D transform, as acrylic
     // needs (no 3D transform above it in Firefox, no opacity above it anywhere). Any other element
-    // gets them on its host, the turn in 3D about the left edge of the group.
+    // gets them on its host, the turn in 3D. Both turn about the origin of the look, which puts the
+    // perspective of every tile at the same point (see turnstileOrigin).
     private writeTile(tile: HTMLElement) {
         const at = this.painted.get(tile);
         if (!at) return;
@@ -858,7 +918,6 @@ export class AxTileGroup extends HTMLElement {
         }
         const turned = look.rotateY !== 0;
         const alpha = look.enter * look.launchAlpha * look.drag;
-        const height = tile.offsetHeight;
         let transform = transformOf(x, y, scale);
         const motion = (tile as Motional).motion;
         if (typeof motion === 'function') {
@@ -871,8 +930,8 @@ export class AxTileGroup extends HTMLElement {
             if (state && turned) {
                 state.rotateY = look.rotateY;
                 state.perspective = look.perspective;
-                state.originX = -at.x;
-                state.originY = height * 0.75;
+                state.originX = look.originX;
+                state.originY = look.originY;
             }
             const key = state ? JSON.stringify(state) : '';
             if (key !== look.motionKey) {
@@ -883,8 +942,7 @@ export class AxTileGroup extends HTMLElement {
         }
         if (turned) transform += ` perspective(${look.perspective}px) rotateY(${look.rotateY}deg)`;
         tile.style.transform = transform;
-        // The turn is about the left edge of the group, which is -at.x in the tile's own px.
-        if (turned || look.wroteOrigin) tile.style.transformOrigin = turned ? `${-at.x}px ${height * 0.75}px` : '';
+        if (turned || look.wroteOrigin) tile.style.transformOrigin = turned ? `${look.originX}px ${look.originY}px` : '';
         look.wroteOrigin = turned;
         if (alpha < 1 || look.wroteOpacity) tile.style.opacity = alpha < 1 ? String(alpha) : '';
         look.wroteOpacity = alpha < 1;
@@ -1316,7 +1374,7 @@ function transformOf(x: number, y: number, scale: number): string {
 function holdFor(kind: 'enter' | 'exit', variant: EntranceVariant, p: Params): Hold {
     const mobile = variant === 'mobile';
     const desktopEnter = kind === 'enter' && !mobile;
-    return { kind, dx: 0, dy: 0, grow: desktopEnter ? p.enterScale : 1, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, enter: 0 };
+    return { kind, dx: 0, dy: 0, grow: desktopEnter ? p.enterScale : 1, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, origin: p.turnstileOrigin, enter: 0 };
 }
 
 // The entrance fields of a look: those of the hold, or none.

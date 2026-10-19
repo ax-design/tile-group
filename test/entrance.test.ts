@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { bandShift, enterDesktop, exitDesktop, parseTime, parseVariant, readParams, turnstile, turnstileBegin } from '../src/entrance.js';
+import { bandShift, enterDesktop, exitDesktop, parseTime, parseVariant, readParams, turnstile, turnstileBegin, turnstileOrigin } from '../src/entrance.js';
 
 // A style declaration with only the given custom properties.
 const style = (values: Record<string, string>) => ({ getPropertyValue: (name: string) => values[name] || '' }) as CSSStyleDeclaration;
@@ -35,6 +35,7 @@ describe('readParams', () => {
         expect(p.enterDelay).toBe(0);
         expect(p.exitDuration).toBe(200);
         expect(p.turnstilePerspective).toBe(1000);
+        expect(p.turnstileOrigin).toBe(0);
         expect(p.turnstileDuration).toBe(600);
         expect(p.launchScale).toBe(0.9);
         expect(p.launchDuration).toBe(100);
@@ -50,6 +51,8 @@ describe('readParams', () => {
         expect(p.enterDelay).toBe(0);
         expect(p.launchScale).toBe(0.5);
         expect(p.turnstileEasing).toEqual([0, 0, 1, 1]);
+        expect(readParams(style({ '--tile-turnstile-origin': '40px' })).turnstileOrigin).toBe(40);
+        expect(readParams(style({ '--tile-turnstile-origin': 'far' })).turnstileOrigin).toBe(0);
     });
 
     test('takes 0 as a length, and a bad easing as the default', () => {
@@ -119,5 +122,16 @@ describe('the curves', () => {
         expect(turnstileBegin(0, 300, true, 0)).toBeCloseTo(0.5142, 3);
         expect(turnstileBegin(1000, 0, true, 0)).toBeCloseTo(0.47, 9);
         expect(turnstileBegin(1000, 0, false, 0)).toBe(0);
+    });
+});
+
+describe('turnstileOrigin', () => {
+    test('puts the axis left of the viewport, and the vanishing point at the middle of its height', () => {
+        // A tile resting at (120, 300) of a 900 px tall viewport.
+        expect(turnstileOrigin(120, 300, 0, 900)).toEqual({ x: -120, y: 150 });
+        // The 40 px of WinJS: the axis 40 px further left.
+        expect(turnstileOrigin(120, 300, 40, 900)).toEqual({ x: -160, y: 150 });
+        // Below the middle the origin is above the tile.
+        expect(turnstileOrigin(0, 600, 0, 900).y).toBe(-150);
     });
 });
