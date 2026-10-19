@@ -166,8 +166,10 @@ export class AxTileGroup extends HTMLElement {
         this.addEventListener('touchmove', this.onTouchMove, { passive: false } as AddEventListenerOptions);
         this.addEventListener('keydown', this.onKeyMove);
         if (typeof MutationObserver !== 'undefined') {
-            this.mutationObserver = new MutationObserver(() => this.schedule(true));
-            this.mutationObserver.observe(this, { childList: true });
+            this.mutationObserver = new MutationObserver((records) => this.onMutations(records));
+            // Any element can be a tile, so the group watches the size attributes of its children
+            // itself: a tile has no way to tell it.
+            this.mutationObserver.observe(this, { childList: true, subtree: true, attributes: true, attributeFilter: ['columns', 'rows'] });
         }
         if (typeof ResizeObserver !== 'undefined') {
             // With auto rows or columns, they follow the size.
@@ -241,7 +243,24 @@ export class AxTileGroup extends HTMLElement {
         this.schedule(true);
     }
 
-    // Called by <ax-tile> when its size changes.
+    // A layout pass for the records of the observer that concern the children: their list, and
+    // their columns and rows. The subtree is observed for the attributes only, so a change inside
+    // a tile (a link, a field) is not a change of the layout.
+    private onMutations(records: MutationRecord[]) {
+        for (const record of records) {
+            const ours = record.type === 'childList' ? record.target === this : record.target.parentNode === this;
+            if (ours) {
+                this.schedule(true);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Lays the tiles out again, animated.
+     * @deprecated The group observes the columns and rows of its children itself. Kept for code
+     * written for <ax-tile>, which called this when its size changed.
+     */
     tileChanged(): void {
         this.schedule(true);
     }
