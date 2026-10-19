@@ -5,6 +5,11 @@
   ax-tile-group { --tile-cell-width: 40px; --tile-cell-height: 40px; --tile-gap: 4px; --tile-rows: 4; margin-bottom: 30px; }
   ax-tile-group.roomy { --tile-cell-width: 48px; --tile-cell-height: 64px; }
   ax-tile { --ax-fill-color: #889; }
+  /* The entrance of a group is a page's choice: none by default. */
+  #en, #ev { --tile-entrance: desktop; }
+  #ev.mobile-in { --tile-entrance: mobile; }
+  #en.to-mobile { --tile-entrance: mobile; }
+  #en.unrelated { --tile-rows: 4; }
 </style></head>
 <body>
 <ax-tile-group id="g" drag="press" contextmenu>
@@ -89,6 +94,29 @@
   <ax-tile id="cg2" columns="2" rows="2" layers="fill">2</ax-tile>
   <ax-tile id="cg3" columns="2" rows="2" layers="fill">3</ax-tile>
   <div id="cg4" columns="2" rows="2" style="background: #99a">4</div>
+</ax-tile-group>
+<!-- Entrance and exit: "ea" has none; "en" (surfaces) and "ep" (plain elements) are below the spacer,
+     so "en" plays its entrance when it is scrolled in. -->
+<ax-tile-group id="ea">
+  <ax-tile id="ea1" columns="2" rows="2" layers="fill">1</ax-tile>
+  <ax-tile id="ea2" columns="2" rows="2" layers="fill">2</ax-tile>
+</ax-tile-group>
+<div style="height: 1200px"></div>
+<ax-tile-group id="en" drag="press">
+  <ax-tile id="en1" columns="2" rows="2" layers="fill">1</ax-tile>
+  <ax-tile id="en2" columns="2" rows="2" layers="fill">2</ax-tile>
+  <ax-tile id="en3" columns="4" rows="2" layers="fill">3</ax-tile>
+  <ax-tile id="en4" columns="2" rows="2" layers="fill">4</ax-tile>
+</ax-tile-group>
+<ax-tile-group id="ev">
+  <ax-tile id="ev1" columns="2" rows="2" layers="fill">1</ax-tile>
+  <ax-tile id="ev2" columns="2" rows="2" layers="fill">2</ax-tile>
+</ax-tile-group>
+<ax-tile-group id="ep">
+  <div id="ep1" columns="2" rows="2" style="background: #99a">1</div>
+  <div id="ep2" columns="2" rows="2" style="background: #99a">2</div>
+  <div id="ep3" columns="4" rows="2" style="background: #99a">3</div>
+  <div id="ep4" columns="2" rows="2" style="background: #99a">4</div>
 </ax-tile-group>
 <script type="module" src="./page.ts"></script>
 </body></html>

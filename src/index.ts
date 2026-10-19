@@ -10,7 +10,8 @@ export { layoutTiles } from './layout.js';
 export type { LayoutOptions, LayoutResult, Placement, TileSpan } from './layout.js';
 export { dropTarget, keyboardTarget, moveIndex } from './reorder.js';
 export type { Direction, DropOptions, DropTarget } from './reorder.js';
-export type { DescribeMove } from './group.js';
+export type { DescribeMove, EntranceOptions } from './group.js';
+export type { EntranceVariant } from './entrance.js';
 
 const length = (name: string, initial: string): PropertySpec => ({ name, syntax: { type: 'length' }, initial, inherits: true, register: true });
 

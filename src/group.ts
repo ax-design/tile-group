@@ -38,8 +38,15 @@
 // and fades to 0.65 in 240 ms while the others shrink to 0.95, and everything settles in 500 ms
 // on drop; all on cubic-bezier(0.1, 0.9, 0.2, 1). With prefers-reduced-motion: reduce the same
 // end states are set at once, with no motion (as Windows does with "Show animations" off).
+//
+// The entrance and exit (enter(), exit()) and the launch of a tile (tilelaunchstart and
+// tilelaunchend) are drawn by writeTile(), the one writer of a tile's transform, opacity and
+// turn. A surface gets its turn and its opacity through motion(), a plain element on its host.
 import { services } from '@ax-design/surface';
+import type { MotionState } from '@ax-design/surface';
 import { parseLength, probeLengthPercentage } from '@ax-design/typed-om';
+import { clamp01, enterDesktop, exitDesktop, parseVariant, readParams, turnstile, turnstileBegin } from './entrance.js';
+import type { EntranceVariant, EntranceFrame, Params } from './entrance.js';
 import { layoutTiles } from './layout.js';
 import type { LayoutResult } from './layout.js';
 import { dropTarget, keyboardTarget, moveIndex } from './reorder.js';
@@ -60,6 +67,8 @@ const DEFAULT_HOLD_MS = 500;
 const DEFAULT_STRIP = 4;
 const DEFAULT_STRIP_VERTICAL = 2;
 const DEFAULT_COLUMNS = 6;
+// The perspective of a tile that is not turned (the default of a surface's motion).
+const DEFAULT_PERSPECTIVE = 1000;
 
 type ReorderReason = 'pointer' | 'keyboard' | 'api';
 // How a reorder lays the tiles out: a drop settles them all at once, a move goes one by one.
@@ -121,6 +130,72 @@ interface Gesture {
     frame: number;
 }
 
+// Where a tile is drawn by the layout, before its look.
+interface Placed {
+    x: number;
+    y: number;
+    scale: number;
+}
+
+// What the entrance, the launch and the drag add to the drawing of a tile (see writeTile). Each
+// one writes its own fields; the opacity is their product.
+interface Look {
+    // Entrance (desktop): px to the right of the place.
+    dx: number;
+    // Entrance (mobile): degrees turned about the left edge of the group, and the perspective.
+    rotateY: number;
+    perspective: number;
+    // Opacity of the entrance and the exit.
+    enter: number;
+    // Launch of another tile: scale about the middle of the group, and its opacity.
+    launch: number;
+    launchAlpha: number;
+    // Opacity of a dragged tile, --tile-drag-opacity.
+    drag: number;
+    // What the group wrote last, so that it can be taken back.
+    wroteOpacity: boolean;
+    wroteOrigin: boolean;
+    motionKey: string;
+}
+
+// The state an entrance leaves its tiles in: before it plays (enter, the tiles wait hidden for
+// the group to show), or after an exit (the tiles stay hidden until the next entrance or a
+// re-layout).
+interface Hold {
+    kind: 'enter' | 'exit';
+    dx: number;
+    rotateY: number;
+    perspective: number;
+    enter: number;
+}
+
+// An entrance or an exit in progress. `randoms` holds, per tile, the random part of its turn's
+// start (mobile). The places and the delays are read from the layout at every frame.
+interface Run {
+    kind: 'enter' | 'exit';
+    variant: EntranceVariant;
+    start: number;
+    duration: number;
+    params: Params;
+    randoms: Map<HTMLElement, number>;
+    done: () => void;
+}
+
+interface Launch {
+    source: HTMLElement;
+    start: number;
+    duration: number;
+    scale: number;
+}
+
+// A child with a motion() method is a surface: its turn and opacity go through it. The group
+// does not need the element class for that.
+type Motional = HTMLElement & { motion?: (state: MotionState | null) => void };
+
+export interface EntranceOptions {
+    variant?: EntranceVariant;
+}
+
 const template = typeof document !== 'undefined' ? document.createElement('template') : null;
 if (template) template.innerHTML = `<style>${STYLE}</style><slot></slot>`;
 
@@ -148,6 +223,20 @@ export class AxTileGroup extends HTMLElement {
     private ownHeight = false;
     private live: HTMLElement | null = null;
     private announceTimer = 0;
+    // The look of each tile, and the place it was drawn at before the look (see writeTile).
+    private looks = new WeakMap<HTMLElement, Look>();
+    private painted = new WeakMap<HTMLElement, Placed>();
+    // The entrance or exit running; the state the tiles are left in (null: at rest); the launch in
+    // progress; the frame of the loop that runs them; the watch that starts an entrance when the
+    // group shows; and whether an entrance has played (it plays once by itself).
+    private run: Run | null = null;
+    private hold: Hold | null = null;
+    private launch: Launch | null = null;
+    private animFrame = 0;
+    private visibility: IntersectionObserver | null = null;
+    private entered = false;
+    // The variant of --tile-entrance as the group last read it (see styleTarget).
+    private seenVariant: EntranceVariant | null = null;
 
     // The words said after a move, for screen readers: position is 1-based, count the tiles. Assign
     // a function to say them in another language.
@@ -165,6 +254,8 @@ export class AxTileGroup extends HTMLElement {
         // Not passive: a held or dragged touch must not scroll the page.
         this.addEventListener('touchmove', this.onTouchMove, { passive: false } as AddEventListenerOptions);
         this.addEventListener('keydown', this.onKeyMove);
+        this.addEventListener('tilelaunchstart', this.onLaunchStart);
+        this.addEventListener('tilelaunchend', this.onLaunchEnd);
         if (typeof MutationObserver !== 'undefined') {
             this.mutationObserver = new MutationObserver((records) => this.onMutations(records));
             // Any element can be a tile, so the group watches the size attributes of its children
@@ -188,6 +279,8 @@ export class AxTileGroup extends HTMLElement {
         }
         services().triggers.add(this, this.styleTarget);
         this.layout(false);
+        this.seenVariant = this.entranceVariant();
+        this.watchEntrance();
     }
 
     // Called by the triggers when the style may have changed: the sizes are read again, and the
@@ -197,6 +290,13 @@ export class AxTileGroup extends HTMLElement {
             if (this.styleCheck) return;
             this.styleCheck = requestAnimationFrame(() => {
                 this.styleCheck = 0;
+                // A new variant of the entrance (a media query, a class) ends a running one at once.
+                const variant = this.entranceVariant();
+                if (variant !== this.seenVariant) {
+                    this.seenVariant = variant;
+                    if (this.run) this.finishRun();
+                    this.primeHold();
+                }
                 const next = this.readMetrics();
                 const now = this.metrics;
                 if (now && next.cellWidth === now.cellWidth && next.cellHeight === now.cellHeight && next.gap === now.gap && next.rows === now.rows && next.columns === now.columns) return;
@@ -215,12 +315,19 @@ export class AxTileGroup extends HTMLElement {
         this.removeEventListener('contextmenu', this.onContextMenu);
         this.removeEventListener('touchmove', this.onTouchMove);
         this.removeEventListener('keydown', this.onKeyMove);
+        this.removeEventListener('tilelaunchstart', this.onLaunchStart);
+        this.removeEventListener('tilelaunchend', this.onLaunchEnd);
         if (this.mutationObserver) this.mutationObserver.disconnect();
         if (this.resizeObserver) this.resizeObserver.disconnect();
         this.mutationObserver = this.resizeObserver = null;
         this.endGesture();
         if (this.pending) cancelAnimationFrame(this.pending);
         this.pending = 0;
+        this.stopWatching();
+        this.finishRun();
+        this.endLaunch();
+        if (this.animFrame) cancelAnimationFrame(this.animFrame);
+        this.animFrame = 0;
     }
 
     attributeChangedCallback(name: string) {
@@ -373,6 +480,14 @@ export class AxTileGroup extends HTMLElement {
     // Tiles that move go one after another (the reposition of WinJS), unless `together` is set:
     // settling after a drop starts everywhere at once, so the dropped tile never waits.
     private applyLayout(order: HTMLElement[], result: LayoutResult, options: { animate: boolean; scale: number; skip?: HTMLElement; duration?: number; together?: boolean }) {
+        // A change of the places, of the sizes or of the children ends a run where it is; the new
+        // layout is then applied as usual.
+        if (this.run && this.layoutChanges(order, result)) this.finishRun();
+        // A re-layout brings the tiles of an exit back.
+        if (this.hold && this.hold.kind === 'exit') {
+            this.hold = null;
+            this.showHold();
+        }
         const m = this.m;
         const stepX = m.cellWidth + m.gap;
         const stepY = m.cellHeight + m.gap;
@@ -407,20 +522,358 @@ export class AxTileGroup extends HTMLElement {
     // Moves a tile to (x, y) at a scale. Returns true when it animates, for the stagger.
     private place(tile: HTMLElement, x: number, y: number, scale: number, animate: boolean, staggerIndex: number, duration: number): boolean {
         const before = this.shown.get(tile);
-        const to = transformOf(x, y, scale);
         if (before && before.x === x && before.y === y && before.scale === scale) return false;
-        // Where the tile is on screen now, also in the middle of an animation.
-        const from = before ? currentTransform(tile, before) : '';
+        // Where the tile is drawn now, also in the middle of an animation.
+        const from = before ? this.painted.get(tile) : undefined;
         if (before && before.animation) before.animation.cancel();
-        tile.style.transform = to;
         let animation: Motion | null = null;
         // Read when the move starts, so a change of the setting applies to the next one.
-        if (animate && before && !reducedMotion()) {
+        if (animate && before && from && !reducedMotion()) {
             const delay = Math.min(STAGGER_CAP_MS, staggerIndex * STAGGER_MS);
-            animation = new ScriptedMove(tile, from, to, duration, delay);
-        }
+            animation = new ScriptedMove((p) => this.paint(tile, p.x, p.y, p.scale), from, { x, y, scale }, duration, delay);
+        } else this.paint(tile, x, y, scale);
         this.shown.set(tile, { x, y, scale, animation });
         return !!animation;
+    }
+
+    // Whether the layout that is about to be applied moves a tile, resizes one, or changes the set of
+    // the tiles.
+    private layoutChanges(order: HTMLElement[], result: LayoutResult): boolean {
+        if (Array.from(this.shown.keys()).some((tile) => tile.parentElement !== this)) return true;
+        const m = this.m;
+        const stepX = m.cellWidth + m.gap;
+        const stepY = m.cellHeight + m.gap;
+        return order.some((tile, i) => {
+            const p = result.placements[i];
+            const at = this.shown.get(tile);
+            const span = tileSpan(tile);
+            return !at || at.x !== p.column * stepX || at.y !== p.row * stepY || tile.style.width !== `${span.columns * stepX - m.gap}px` || tile.style.height !== `${span.rows * stepY - m.gap}px`;
+        });
+    }
+
+    // Draws a tile at a place (before its look): the one call that places a tile.
+    private paint(tile: HTMLElement, x: number, y: number, scale: number) {
+        this.painted.set(tile, { x, y, scale });
+        this.writeTile(tile);
+    }
+
+    // ----- Entrance, exit and launch -----
+
+    /**
+     * Plays the entrance: the tiles come in from the right (desktop) or turn in from the left edge
+     * of the group (mobile). Resolves when the last tile has arrived. The variant defaults to the
+     * --tile-entrance, else to "desktop".
+     */
+    enter(options: EntranceOptions = {}): Promise<void> {
+        return this.play('enter', this.variantOf(options));
+    }
+
+    /**
+     * Plays the exit: the tiles fade out (desktop) or turn away (mobile), and stay invisible until
+     * the next enter() or a re-layout. Resolves when the last tile has gone.
+     */
+    exit(options: EntranceOptions = {}): Promise<void> {
+        return this.play('exit', this.variantOf(options));
+    }
+
+    private variantOf(options: EntranceOptions): EntranceVariant {
+        return parseVariant(options.variant || '') || this.entranceVariant() || 'desktop';
+    }
+
+    // The variant the page sets with --tile-entrance (none, or anything else: null).
+    private entranceVariant(): EntranceVariant | null {
+        return parseVariant(getComputedStyle(this).getPropertyValue('--tile-entrance').trim());
+    }
+
+    private play(kind: 'enter' | 'exit', variant: EntranceVariant): Promise<void> {
+        // An entrance that is played by hand is not played again when the group shows.
+        if (kind === 'enter') {
+            this.entered = true;
+            this.stopWatching();
+        }
+        // The one in progress ends where it is, and its promise resolves.
+        this.finishRun();
+        const params = readParams(getComputedStyle(this));
+        // The user wants no motion: the end state at once, and the promise on the next frame.
+        if (reducedMotion()) {
+            this.hold = kind === 'exit' ? holdFor(kind, variant, params) : null;
+            this.showHold();
+            return nextFrame();
+        }
+        const duration = variant === 'mobile' ? params.turnstileDuration : kind === 'enter' ? params.enterDuration : params.exitDuration;
+        // Mobile: each tile's share of the duration at which its turn starts is worked out from its
+        // place at every frame, with this random part.
+        const randoms = new Map<HTMLElement, number>();
+        for (const tile of this.tiles) randoms.set(tile, Math.random());
+        return new Promise<void>((resolve) => {
+            this.run = { kind, variant, start: performance.now(), duration, params, randoms, done: resolve };
+            this.hold = null;
+            this.runFrame(performance.now());
+            this.kick();
+        });
+    }
+
+    // Sets the look of every tile for the moment `now` of the run. The places are read from the
+    // layout now, not at the start, so a tile is where the layout puts it.
+    private runFrame(now: number) {
+        const run = this.run;
+        if (!run) return;
+        const t = now - run.start;
+        const p = run.params;
+        const m = this.m;
+        let total = run.duration;
+        for (const tile of this.tiles) {
+            const at = this.shown.get(tile);
+            if (!at) continue;
+            let frame: EntranceFrame;
+            if (run.variant === 'mobile') {
+                const begin = turnstileBegin(at.x, at.y, run.kind === 'enter', run.randoms.get(tile) || 0);
+                frame = turnstile(run.duration > 0 ? t / run.duration : 1, begin, run.kind === 'enter', p);
+            } else if (run.kind === 'enter') {
+                // The column (row, vertical) of the tile sets its delay.
+                const index = this.vertical ? Math.round(at.y / (m.cellHeight + m.gap)) : Math.round(at.x / (m.cellWidth + m.gap));
+                const delay = p.enterDelay + index * p.enterStagger;
+                total = Math.max(total, delay + run.duration);
+                frame = enterDesktop(t, delay, p);
+            } else frame = exitDesktop(t, p);
+            const look = this.lookOf(tile);
+            look.dx = frame.dx;
+            look.rotateY = frame.rotateY;
+            look.perspective = p.turnstilePerspective;
+            look.enter = frame.enter;
+            this.writeTile(tile);
+        }
+        if (t >= total) this.finishRun();
+    }
+
+    // Ends the entrance or exit in progress at its end state, and resolves its promise.
+    private finishRun() {
+        const run = this.run;
+        if (!run) return;
+        this.run = null;
+        this.hold = run.kind === 'exit' ? holdFor('exit', run.variant, run.params) : null;
+        this.showHold();
+        run.done();
+    }
+
+    // A drag or a keyboard move ends an entrance or an exit where it is, at its end state; a
+    // group that has not shown yet is shown.
+    private jumpEntrance() {
+        this.finishRun();
+        if (this.hold && this.hold.kind === 'enter') {
+            this.stopWatching();
+            this.entered = true;
+            this.hold = null;
+            this.showHold();
+        }
+    }
+
+    // Draws the state of the hold (or none) on every tile.
+    private showHold() {
+        for (const tile of this.tiles) {
+            setEntrance(this.lookOf(tile), this.hold);
+            this.writeTile(tile);
+        }
+    }
+
+    // The look of a tile; a tile not seen before gets the state of the hold.
+    private lookOf(tile: HTMLElement): Look {
+        let look = this.looks.get(tile);
+        if (!look) {
+            look = { dx: 0, rotateY: 0, perspective: DEFAULT_PERSPECTIVE, enter: 1, launch: 1, launchAlpha: 1, drag: 1, wroteOpacity: false, wroteOrigin: false, motionKey: '' };
+            setEntrance(look, this.hold);
+            this.looks.set(tile, look);
+        }
+        return look;
+    }
+
+    // An entrance that has not played waits for the group to show, and plays the variant the page
+    // sets then. Until then its tiles are in their first state, so none shows at rest for a moment.
+    private watchEntrance() {
+        if (this.entered) return;
+        this.primeHold();
+        if (typeof IntersectionObserver === 'undefined') {
+            const variant = this.entranceVariant();
+            if (variant) this.enter({ variant });
+            return;
+        }
+        this.visibility = new IntersectionObserver((entries) => {
+            if (!entries.some((e) => e.isIntersecting)) return;
+            const variant = this.entranceVariant();
+            if (variant) this.enter({ variant });
+        });
+        this.visibility.observe(this);
+    }
+
+    // The hold of a waiting entrance follows the variant the page sets (none: no hold).
+    private primeHold() {
+        if (this.entered || (this.hold && this.hold.kind === 'exit')) return;
+        const variant = this.entranceVariant();
+        this.hold = variant ? holdFor('enter', variant, readParams(getComputedStyle(this))) : null;
+        this.showHold();
+    }
+
+    private stopWatching() {
+        if (this.visibility) this.visibility.disconnect();
+        this.visibility = null;
+    }
+
+    // The loop that runs the entrance, the exit and the launch, one frame at a time.
+    private kick() {
+        if (!this.animFrame) this.animFrame = requestAnimationFrame(this.tick);
+    }
+
+    private tick = () => {
+        this.animFrame = 0;
+        const now = performance.now();
+        this.runFrame(now);
+        const launching = this.launchFrame(now);
+        if (this.run || launching) this.kick();
+    };
+
+    // A tile launched: the others shrink toward the middle of the group and fade. A listener above
+    // the group may still cancel the event, so the decision waits until it has passed them all.
+    private onLaunchStart = (event: Event) => {
+        const source = this.tileOf(event);
+        if (!source) return;
+        Promise.resolve().then(() => {
+            if (!event.defaultPrevented) this.startLaunch(source);
+        });
+    };
+
+    // The launched tile is back: the others are restored at once, and an entrance plays again.
+    private onLaunchEnd = () => {
+        this.endLaunch();
+        const variant = this.entranceVariant();
+        if (variant) this.enter({ variant });
+    };
+
+    private startLaunch(source: HTMLElement) {
+        const params = readParams(getComputedStyle(this));
+        this.clearLaunch();
+        // The user wants no motion: the end of the launch at once.
+        const duration = reducedMotion() ? 0 : params.launchDuration;
+        this.launch = { source, start: performance.now(), duration, scale: params.launchScale };
+        this.launchFrame(performance.now());
+        this.kick();
+    }
+
+    // Shrinks and fades the others; true while the launch goes on.
+    private launchFrame(now: number): boolean {
+        const l = this.launch;
+        if (!l) return false;
+        const t = l.duration > 0 ? clamp01((now - l.start) / l.duration) : 1;
+        const e = t >= 1 ? 1 : ease(t);
+        for (const tile of this.tiles) {
+            if (tile === l.source) continue;
+            const look = this.lookOf(tile);
+            look.launch = 1 + (l.scale - 1) * e;
+            look.launchAlpha = 1 - e;
+            this.writeTile(tile);
+        }
+        return t < 1;
+    }
+
+    private endLaunch() {
+        this.launch = null;
+        this.clearLaunch();
+    }
+
+    private clearLaunch() {
+        for (const tile of this.tiles) {
+            const look = this.lookOf(tile);
+            look.launch = 1;
+            look.launchAlpha = 1;
+            this.writeTile(tile);
+        }
+    }
+
+    // The one writer of a tile's drawing. The place and scale come from the layout (or from a
+    // move in progress); the look adds the entrance, the launch and the drag fade. A surface gets
+    // its turn and its opacity through motion(), and its host only the 2D transform, as acrylic
+    // needs (no 3D transform above it in Firefox, no opacity above it anywhere). Any other element
+    // gets them on its host, the turn in 3D about the left edge of the group.
+    private writeTile(tile: HTMLElement) {
+        const at = this.painted.get(tile);
+        if (!at) return;
+        const look = this.lookOf(tile);
+        let x = at.x + look.dx;
+        let y = at.y;
+        let scale = at.scale;
+        if (look.launch !== 1) {
+            // Scaled about the middle of the group. The translate below assumes the transform origin
+            // is the middle of the tile, which is the default.
+            const l = look.launch;
+            const cx = this.clientWidth / 2;
+            const cy = this.clientHeight / 2;
+            x = cx + l * (x - cx) - (1 - l) * (tile.offsetWidth / 2);
+            y = cy + l * (y - cy) - (1 - l) * (tile.offsetHeight / 2);
+            scale *= l;
+        }
+        const turned = look.rotateY !== 0;
+        const alpha = look.enter * look.launchAlpha * look.drag;
+        const height = tile.offsetHeight;
+        let transform = transformOf(x, y, scale);
+        const motion = (tile as Motional).motion;
+        if (typeof motion === 'function') {
+            tile.style.transform = transform;
+            // Written before the child was a surface (the group can connect first): taken back here.
+            if (look.wroteOpacity) tile.style.opacity = '';
+            if (look.wroteOrigin) tile.style.transformOrigin = '';
+            look.wroteOpacity = look.wroteOrigin = false;
+            const state: MotionState | null = turned || alpha < 1 ? { opacity: alpha } : null;
+            if (state && turned) {
+                state.rotateY = look.rotateY;
+                state.perspective = look.perspective;
+                state.originX = -at.x;
+                state.originY = height * 0.75;
+            }
+            const key = state ? JSON.stringify(state) : '';
+            if (key !== look.motionKey) {
+                look.motionKey = key;
+                motion.call(tile, state);
+            }
+            return;
+        }
+        if (turned) transform += ` perspective(${look.perspective}px) rotateY(${look.rotateY}deg)`;
+        tile.style.transform = transform;
+        // The turn is about the left edge of the group, which is -at.x in the tile's own px.
+        if (turned || look.wroteOrigin) tile.style.transformOrigin = turned ? `${-at.x}px ${height * 0.75}px` : '';
+        look.wroteOrigin = turned;
+        if (alpha < 1 || look.wroteOpacity) tile.style.opacity = alpha < 1 ? String(alpha) : '';
+        look.wroteOpacity = alpha < 1;
+    }
+
+    // The fade of a dragged tile, one frame at a time; a new fade stops the one running.
+    private fadeDrag(tile: HTMLElement, to: number, duration: number, done?: () => void) {
+        const look = this.lookOf(tile);
+        const running = fades.get(tile);
+        if (running) cancelAnimationFrame(running);
+        fades.delete(tile);
+        const from = look.drag;
+        const reduced = reducedMotion();
+        if (from === to || reduced) {
+            look.drag = to;
+            this.writeTile(tile);
+            // The same moment as a fade: a dropped tile stays above the others until it has landed.
+            if (done) window.setTimeout(done, reduced ? 0 : duration);
+            return;
+        }
+        const start = performance.now();
+        const step = (now: number) => {
+            const t = Math.min(1, (now - start) / duration);
+            if (t >= 1) {
+                look.drag = to;
+                this.writeTile(tile);
+                fades.delete(tile);
+                if (done) done();
+                return;
+            }
+            look.drag = from + (to - from) * ease(t);
+            this.writeTile(tile);
+            fades.set(tile, requestAnimationFrame(step));
+        };
+        fades.set(tile, requestAnimationFrame(step));
     }
 
     // ----- Gestures -----
@@ -563,12 +1016,13 @@ export class AxTileGroup extends HTMLElement {
         const g = this.gesture!;
         if (g.lifted) return;
         g.lifted = true;
+        this.jumpEntrance();
         const release = (g.tile as HTMLElement & { release?: () => void }).release;
         if (typeof release === 'function') release.call(g.tile);
         const shown = this.shown.get(g.tile);
         if (shown) this.place(g.tile, shown.x, shown.y, DRAG_SCALE, true, 0, LIFT_MS);
         g.tile.style.zIndex = '1';
-        fadeTo(g.tile, dragOpacity(g.tile), LIFT_MS);
+        this.fadeDrag(g.tile, dragOpacity(g.tile), LIFT_MS);
         for (const tile of this.tiles) {
             if (tile === g.tile) continue;
             const s = this.shown.get(tile);
@@ -606,7 +1060,7 @@ export class AxTileGroup extends HTMLElement {
         // The dragged tile follows the pointer directly.
         const shown = this.shown.get(g.tile);
         if (shown && shown.animation) shown.animation.cancel();
-        g.tile.style.transform = transformOf(x, y, DRAG_SCALE);
+        this.paint(g.tile, x, y, DRAG_SCALE);
         this.shown.set(g.tile, { x, y, scale: DRAG_SCALE, animation: null });
         const target = dropTarget(g.order.map(tileSpan), g.from, { column: x / (m.cellWidth + m.gap), row: y / (m.cellHeight + m.gap) }, { ...this.layoutOptions(), current: g.to });
         if (target.index === g.to) return;
@@ -625,7 +1079,7 @@ export class AxTileGroup extends HTMLElement {
         // The pointerup of a drag is followed by a click on the tile.
         suppressNextClick();
         const to = this.reorder(tile, g.from, cancel ? g.from : g.to, 'pointer', DROP_SETTLE);
-        fadeTo(tile, 1, DROP_MS, () => {
+        this.fadeDrag(tile, 1, DROP_MS, () => {
             if (!this.gesture || this.gesture.tile !== tile) tile.style.zIndex = '';
         });
         tile.dispatchEvent(new CustomEvent('tiledragend', { bubbles: true, composed: true, detail: { from: g.from, to } }));
@@ -716,7 +1170,9 @@ export class AxTileGroup extends HTMLElement {
         event.preventDefault();
         const from = this.tiles.indexOf(tile);
         const to = keyboardTarget(this.tiles.map(tileSpan), from, direction, this.layoutOptions());
-        if (to !== from) this.reorder(tile, from, to, 'keyboard', MOVE_SETTLE);
+        if (to === from) return;
+        this.jumpEntrance();
+        this.reorder(tile, from, to, 'keyboard', MOVE_SETTLE);
     };
 
     private endGesture() {
@@ -730,7 +1186,7 @@ export class AxTileGroup extends HTMLElement {
                 const s = this.shown.get(tile);
                 if (s) this.place(tile, s.x, s.y, 1, true, 0, DROP_MS);
             }
-            fadeTo(g.tile, 1, DROP_MS, () => (g.tile.style.zIndex = ''));
+            this.fadeDrag(g.tile, 1, DROP_MS, () => (g.tile.style.zIndex = ''));
         }
     }
 
@@ -767,58 +1223,35 @@ function ease(t: number): number {
     return at(y1, y2, (lo + hi) / 2);
 }
 
-interface Placed {
-    x: number;
-    y: number;
-    scale: number;
-}
-
-// translate(x, y) scale(s) as transformOf writes it, or a matrix of one as getComputedStyle
-// returns it (the origin is applied apart, so the matrix is matrix(s, 0, 0, s, x, y)).
-function placedOf(transform: string): Placed {
-    const matrix = /^matrix\(([^)]+)\)$/.exec(transform);
-    if (matrix) {
-        const m = matrix[1].split(',').map(parseFloat);
-        return { x: m[4], y: m[5], scale: m[0] };
-    }
-    const t = /translate\((-?[\d.e-]+)px(?:,\s*(-?[\d.e-]+)px)?\)/.exec(transform);
-    const s = /scale\((-?[\d.e-]+)\)/.exec(transform);
-    return { x: t ? +t[1] : 0, y: t && t[2] ? +t[2] : 0, scale: s ? +s[1] : 1 };
-}
-
-// A tile moving from one transform to another by script, frame by frame, with the timing of
-// the animations: a delay showing the start, then the curve of ease().
+// A tile moving from one place to another by script, frame by frame, with the timing of the
+// animations: a delay showing the start, then the curve of ease(). `draw` shows each frame.
 class ScriptedMove implements Motion {
     playState = 'running';
     private frame = 0;
     private readonly start = performance.now();
-    private readonly from: Placed;
-    private readonly to: Placed;
 
     constructor(
-        private readonly tile: HTMLElement,
-        from: string,
-        private readonly end: string,
+        private readonly draw: (p: Placed) => void,
+        private readonly from: Placed,
+        private readonly to: Placed,
         private readonly duration: number,
         private readonly delay: number
     ) {
-        this.from = placedOf(from);
-        this.to = placedOf(end);
-        tile.style.transform = from;
+        draw(from);
         this.frame = requestAnimationFrame(this.step);
     }
 
     private step = (now: number) => {
         const t = Math.min(1, Math.max(0, (now - this.start - this.delay) / this.duration));
         if (t >= 1) {
-            this.tile.style.transform = this.end;
+            this.draw(this.to);
             this.playState = 'finished';
             this.frame = 0;
             return;
         }
         const k = ease(t);
         const { from, to } = this;
-        this.tile.style.transform = transformOf(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k, from.scale + (to.scale - from.scale) * k);
+        this.draw({ x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k, scale: from.scale + (to.scale - from.scale) * k });
         this.frame = requestAnimationFrame(this.step);
     };
 
@@ -833,13 +1266,22 @@ function transformOf(x: number, y: number, scale: number): string {
     return scale === 1 ? `translate(${x}px, ${y}px)` : `translate(${x}px, ${y}px) scale(${scale})`;
 }
 
-// The transform on screen: the running animation's current value, or the last one set.
-function currentTransform(tile: HTMLElement, shown: Shown): string {
-    if (shown.animation && shown.animation.playState === 'running') {
-        const value = getComputedStyle(tile).transform;
-        if (value && value !== 'none') return value;
-    }
-    return transformOf(shown.x, shown.y, shown.scale);
+// The state of a hold: what the tiles show between an entrance and the next one.
+function holdFor(kind: 'enter' | 'exit', variant: EntranceVariant, p: Params): Hold {
+    const mobile = variant === 'mobile';
+    return { kind, dx: kind === 'enter' && !mobile ? p.enterOffset : 0, rotateY: mobile ? 90 : 0, perspective: p.turnstilePerspective, enter: 0 };
+}
+
+// The entrance fields of a look: those of the hold, or none.
+function setEntrance(look: Look, hold: Hold | null) {
+    look.dx = hold ? hold.dx : 0;
+    look.rotateY = hold ? hold.rotateY : 0;
+    look.perspective = hold ? hold.perspective : DEFAULT_PERSPECTIVE;
+    look.enter = hold ? hold.enter : 1;
+}
+
+function nextFrame(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 // The opacity of a dragged tile: --tile-drag-opacity, or the 0.65 of Windows. Below 1 the tile
@@ -856,37 +1298,8 @@ function reducedMotion(): boolean {
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-// The fade running on each tile, so a new one stops it.
+// The drag fade running on each tile, so a new one stops it.
 const fades = new WeakMap<HTMLElement, number>();
-
-function fadeTo(tile: HTMLElement, opacity: number, duration: number, done?: () => void) {
-    const running = fades.get(tile);
-    if (running) cancelAnimationFrame(running);
-    fades.delete(tile);
-    const from = parseFloat(getComputedStyle(tile).opacity);
-    const end = opacity === 1 ? '' : String(opacity);
-    const reduced = reducedMotion();
-    if (from === opacity || reduced) {
-        tile.style.opacity = end;
-        // The same moment as a fade: a dropped tile stays above the others until it has landed.
-        if (done) window.setTimeout(done, reduced ? 0 : duration);
-        return;
-    }
-    const start = performance.now();
-    const step = (now: number) => {
-        const t = Math.min(1, (now - start) / duration);
-        if (t >= 1) {
-            tile.style.opacity = end;
-            fades.delete(tile);
-            if (done) done();
-            return;
-        }
-        tile.style.opacity = String(from + (opacity - from) * ease(t));
-        fades.set(tile, requestAnimationFrame(step));
-    };
-    tile.style.opacity = String(from);
-    fades.set(tile, requestAnimationFrame(step));
-}
 
 // A drag or a held touch ends with a click on the tile; it is not a click.
 function suppressNextClick() {

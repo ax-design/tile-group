@@ -48,6 +48,21 @@ const expectedCells = (group: HTMLElement, rows = 4) =>
         { rows, strip: +(group.getAttribute('strip') || 4) }
     ).placements.map((p) => [p.column, p.row]);
 const ids = (group: HTMLElement) => Array.from(group.children).map((t) => t.id).join('');
+// A surface's motion (null at rest); plain elements have none.
+type Surfaceish = HTMLElement & { debugState?: { motion: { opacity?: number; rotateY?: number; originX?: number; originY?: number } | null } };
+const motionOf = (el: Element) => (el as Surfaceish).debugState?.motion ?? null;
+// The opacity a tile is drawn with: a surface's motion, else the host's computed opacity.
+const opacityOf = (el: Element) => {
+    const m = motionOf(el);
+    return m ? (m.opacity === undefined ? 1 : m.opacity) : parseFloat(getComputedStyle(el as HTMLElement).opacity);
+};
+// Every tile of the group drawn at its place, fully opaque, with no turn and no scale.
+const rest = (group: HTMLElement) =>
+    Array.from(group.children).every((c) => {
+        const el = c as HTMLElement;
+        const m = motionOf(el);
+        return opacityOf(el) === 1 && (!m || !m.rotateY) && !/scale|perspective|rotate/.test(el.style.transform) && !el.style.transformOrigin;
+    });
 
 // Synthetic pointer input at a point of the page.
 let pointerId = 10;
@@ -180,7 +195,7 @@ async function run() {
     check('the dragged tile ends its surface press', !surface.debugState || !surface.debugState.tilt);
     // The lift fades in 240 ms.
     await wait(150);
-    check('the dragged tile lifts', /scale\(1\.05\)/.test(a.style.transform) && a.style.opacity === '0.65', `${a.style.transform} ${a.style.opacity}`);
+    check('the dragged tile lifts', /scale\(1\.05\)/.test(a.style.transform) && opacityOf(a) === 0.65, `${a.style.transform} ${opacityOf(a)}`);
     // Wait for the others to arrive (the dragged tile has lifted by now).
     await wait(650);
     const preview = cellsOf(g);
@@ -190,7 +205,7 @@ async function run() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     pointer('pointerup', start.x + 2 * STEP, start.y);
     if (reduced)
-        check('reduced motion: the drop lands the tiles at once', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)) && a.style.opacity === '' && !/scale/.test(a.style.transform), JSON.stringify(cellsOf(g)));
+        check('reduced motion: the drop lands the tiles at once', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)) && opacityOf(a) === 1 && !/scale/.test(a.style.transform), JSON.stringify(cellsOf(g)));
     let clicked = false;
     a.addEventListener('click', () => (clicked = true), { once: true });
     a.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -199,7 +214,7 @@ async function run() {
     check('the drop fires tilereorder', events.some((e) => e === 'tilereorder:a:{"from":0,"to":1,"reason":"pointer"}'), events.join(' '));
     check('the drop reorders the children', ids(g) === 'bacdef', ids(g));
     await wait(700);
-    check('after the drop the tiles rest in the new layout', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)) && a.style.opacity === '' && !/scale/.test(a.style.transform), JSON.stringify(cellsOf(g)));
+    check('after the drop the tiles rest in the new layout', JSON.stringify(cellsOf(g)) === JSON.stringify(expectedCells(g)) && opacityOf(a) === 1 && !/scale/.test(a.style.transform), JSON.stringify(cellsOf(g)));
     clicked = false;
     a.addEventListener('click', () => (clicked = true), { once: true });
     a.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -391,7 +406,7 @@ async function run() {
     check('an opaque dragged tile runs no opacity animation', opacityAnimations === 0, String(opacityAnimations));
     await frames(2);
     await wait(300);
-    check('--tile-drag-opacity: 1 keeps a dragged tile opaque', /scale\(1\.05\)/.test(glass.style.transform) && glass.style.opacity === '', `${glass.style.transform} ${glass.style.opacity}`);
+    check('--tile-drag-opacity: 1 keeps a dragged tile opaque', /scale\(1\.05\)/.test(glass.style.transform) && opacityOf(glass) === 1, `${glass.style.transform} ${opacityOf(glass)}`);
     pointer('pointermove', from.x, from.y);
     pointer('pointerup', from.x, from.y);
     await wait(100);
@@ -615,6 +630,244 @@ async function run() {
         } finally {
             if (native) proto.moveBefore = native as typeof proto.moveBefore;
         }
+    }
+
+    // 13. Entrance, exit and launch: "ea" has no entrance, "en" (surfaces) and "ep" (plain elements)
+    // have one; "en" plays it once it is scrolled into view.
+    {
+        const ea = byId('ea') as AxTileGroup;
+        const en = byId('en') as AxTileGroup;
+        const ep = byId('ep') as AxTileGroup;
+        const enTiles = ['en1', 'en2', 'en3', 'en4'];
+        record(en);
+        const launch = (from: Element) => from.dispatchEvent(new CustomEvent('tilelaunchstart', { bubbles: true, composed: true, cancelable: true, detail: {} }));
+        const launched = (from: Element) => from.dispatchEvent(new CustomEvent('tilelaunchend', { bubbles: true, composed: true, detail: {} }));
+
+        // 13a. Without the attribute nothing animates on load.
+        // 13a. --tile-entrance is none by default: nothing plays by itself, on load or later.
+        check('--tile-entrance none (the default): the tiles are at rest on load', rest(ea) && Array.from(ea.children).every((c) => !motionOf(c)), Array.from(ea.children).map((c) => JSON.stringify(motionOf(c))).join(' '));
+        await wait(1000);
+        check('--tile-entrance none: nothing plays later either', rest(ea) && Array.from(ea.children).every((c) => !motionOf(c)), Array.from(ea.children).map((c) => JSON.stringify(motionOf(c))).join(' '));
+
+        // 13b. The desktop entrance plays once the group is shown. The stagger is set long, so the
+        // columns can be told apart.
+        en.style.setProperty('--tile-enter-stagger', '300ms');
+        check('entrance: the tiles wait hidden until the group shows', enTiles.every((id) => opacityOf(byId(id)) === 0), enTiles.map((id) => opacityOf(byId(id))).join(' '));
+        byId('en').scrollIntoView({ block: 'start' });
+        await wait(300);
+        if (!reduced) {
+            // The last column (en4, the fifth) starts 4 x 300 ms after the first.
+            check('entrance: the first column starts before the last', opacityOf(byId('en1')) > 0 && opacityOf(byId('en1')) < 1 && opacityOf(byId('en4')) === 0, `${opacityOf(byId('en1'))} ${opacityOf(byId('en4'))}`);
+        }
+        await wait(2300);
+        check('entrance: the tiles end at their places, fully opaque', rest(en) && JSON.stringify(cellsOf(en)) === JSON.stringify(expectedCells(en)), JSON.stringify(cellsOf(en)));
+        en.style.removeProperty('--tile-enter-stagger');
+        // It plays once: a scroll away and back starts nothing.
+        window.scrollTo(0, 0);
+        await wait(200);
+        byId('en').scrollIntoView({ block: 'start' });
+        await wait(300);
+        check('entrance: it plays once, not again when scrolled back in', rest(en), enTiles.map((id) => opacityOf(byId(id))).join(' '));
+
+        // 13c. enter() and exit() of the desktop variant. The timing is that of the defaults: the
+        // last column (two columns after the first) starts 2 x 33 ms late.
+        const exiting = en.exit({ variant: 'desktop' });
+        if (!reduced) {
+            await wait(100);
+            check('desktop exit: midway the tiles fade, without turning', opacityOf(byId('en1')) > 0 && opacityOf(byId('en1')) < 1 && !motionOf(byId('en1'))?.rotateY, String(opacityOf(byId('en1'))));
+        }
+        await exiting;
+        check('desktop exit: the tiles end invisible', enTiles.every((id) => opacityOf(byId(id)) === 0), enTiles.map((id) => opacityOf(byId(id))).join(' '));
+        const t0 = performance.now();
+        let arrived = false;
+        const entering = en.enter({ variant: 'desktop' }).then(() => (arrived = true));
+        if (!reduced) {
+            await wait(300);
+            const m = motionOf(byId('en1'));
+            check('desktop enter: midway a surface fades in, with its host 2D and opaque', !!m && m.opacity! > 0 && m.opacity! < 1 && getComputedStyle(byId('en1')).opacity === '1' && !/matrix3d/.test(getComputedStyle(byId('en1')).transform), `${JSON.stringify(m)} ${getComputedStyle(byId('en1')).transform}`);
+        }
+        await entering;
+        const took = performance.now() - t0;
+        check('enter() resolves when the last tile arrived', arrived && (reduced ? took < 200 : took >= 1000 && took < 1400), `${Math.round(took)} ms`);
+        check('enter() brings the tiles back to rest', rest(en), enTiles.map((id) => opacityOf(byId(id))).join(' '));
+
+        // The plain elements: their hosts fade, and the timing is the same.
+        const pe = ep.enter({ variant: 'desktop' });
+        if (!reduced) {
+            await wait(300);
+            const o = parseFloat(getComputedStyle(byId('ep1')).opacity);
+            check('desktop enter: midway a plain element fades in on its host', o > 0 && o < 1, String(o));
+        }
+        await pe;
+        check('desktop enter of a plain element ends at rest', rest(ep), '');
+
+        // 13d. The mobile variant: the turn about the left edge of the group, from 90 degrees.
+        await en.exit({ variant: 'mobile' });
+        check('mobile exit: the tiles end turned away and invisible', enTiles.every((id) => { const m = motionOf(byId(id)); return !!m && m.rotateY === 90 && m.opacity === 0; }), enTiles.map((id) => JSON.stringify(motionOf(byId(id)))).join(' '));
+        const turning = en.enter({ variant: 'mobile' });
+        if (!reduced) {
+            await wait(300);
+            const x4 = cellsOf(en)[3][0] * STEP;
+            const m = motionOf(byId('en4'));
+            check('mobile enter: midway a surface turns about the left edge of the group', !!m && m.rotateY! > 0 && m.rotateY! < 90 && Math.abs(m.originX! + x4) < 0.01 && x4 > 0, `${JSON.stringify(m)} x=${x4}`);
+            check('mobile enter: no surface has a 3D transform on its host', enTiles.every((id) => !/matrix3d/.test(getComputedStyle(byId(id)).transform)), enTiles.map((id) => getComputedStyle(byId(id)).transform).join(' | '));
+        }
+        await turning;
+        check('mobile enter ends at rest', rest(en), enTiles.map((id) => JSON.stringify(motionOf(byId(id)))).join(' '));
+
+        const turningPlain = ep.enter({ variant: 'mobile' });
+        if (!reduced) {
+            await wait(300);
+            const p3 = byId('ep3');
+            const style = getComputedStyle(p3);
+            const x3 = cellsOf(ep)[2][0] * STEP;
+            check('mobile enter of a plain element: a 3D turn on its host, about the left edge', /matrix3d/.test(style.transform) && Math.abs(parseFloat(style.transformOrigin) + x3) < 0.01, `${style.transform} ${style.transformOrigin}`);
+        }
+        await turningPlain;
+        check('mobile enter of a plain element ends at rest', rest(ep) && getComputedStyle(byId('ep3')).transformOrigin !== '', getComputedStyle(byId('ep3')).transformOrigin);
+
+        // 13e. The exits: the plain elements end invisible, and an enter brings them back.
+        await ep.exit({ variant: 'desktop' });
+        check('exit of a plain element: invisible at its end', ['ep1', 'ep2', 'ep3', 'ep4'].every((id) => getComputedStyle(byId(id)).opacity === '0'), '');
+        await ep.enter({ variant: 'desktop' });
+        check('enter after an exit brings a plain element back', rest(ep), '');
+
+        // 13f. Launch: the others shrink toward the middle of the group and fade; the launched tile
+        // stays. A canceled launch changes nothing, and tilelaunchend restores the group at once.
+        launch(byId('en1'));
+        await wait(300);
+        {
+            const cx = en.clientWidth / 2;
+            const cy = en.clientHeight / 2;
+            const e2 = byId('en2') as HTMLElement;
+            const [c2, r2] = cellsOf(en)[1];
+            const tr = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\((-?[\d.]+)\)/.exec(e2.style.transform);
+            const wantX = cx + 0.9 * (c2 * STEP - cx) - 0.1 * (e2.offsetWidth / 2);
+            const wantY = cy + 0.9 * (r2 * STEP - cy) - 0.1 * (e2.offsetHeight / 2);
+            check('launch: the others shrink to 0.9 and fade', ['en2', 'en3', 'en4'].every((id) => opacityOf(byId(id)) === 0 && /scale\(0\.9\)/.test(byId(id).style.transform)), ['en2', 'en3', 'en4'].map((id) => byId(id).style.transform + ' ' + opacityOf(byId(id))).join(' | '));
+            check('launch: the shrink is about the middle of the group', !!tr && Math.abs(+tr[1] - wantX) < 0.5 && Math.abs(+tr[2] - wantY) < 0.5, `${e2.style.transform} want ${wantX.toFixed(1)} ${wantY.toFixed(1)}`);
+        }
+        check('launch: the launched tile is left alone', motionOf(byId('en1')) === null && !/scale/.test(byId('en1').style.transform), byId('en1').style.transform);
+        // The synchronous restore: the others are back at once, and the entrance plays again.
+        launched(byId('en1'));
+        // Under reduced motion the entrance it starts is at its end at once.
+        check('tilelaunchend restores the others at once, and plays the entrance', ['en2', 'en3', 'en4'].every((id) => !/scale/.test(byId(id).style.transform)) && opacityOf(byId('en2')) === (reduced ? 1 : 0), ['en2', 'en3', 'en4'].map((id) => byId(id).style.transform + ' ' + opacityOf(byId(id))).join(' | '));
+        await wait(1500);
+        check('and the entrance ends at rest', rest(en), '');
+
+        const veto = (e: Event) => e.preventDefault();
+        en.addEventListener('tilelaunchstart', veto);
+        launch(byId('en1'));
+        await wait(300);
+        en.removeEventListener('tilelaunchstart', veto);
+        check('a canceled launch changes nothing', rest(en), enTiles.map((id) => byId(id).style.transform).join(' | '));
+
+        // 13g. A drag during the entrance first jumps the entrance to its end, then drags as before.
+        await en.exit({ variant: 'desktop' });
+        events.length = 0;
+        let arrivedAtDrag = false;
+        en.enter({ variant: 'desktop' }).then(() => (arrivedAtDrag = true));
+        await wait(300);
+        const c2 = center(byId('en2'));
+        pointer('pointerdown', c2.x, c2.y, 'mouse', byId('en2'));
+        pointer('pointermove', c2.x + 2 * STEP, c2.y);
+        await frames(2);
+        check('a drag jumps the entrance to its end first', arrivedAtDrag && opacityOf(byId('en1')) === 1 && motionOf(byId('en1')) === null, `${arrivedAtDrag} ${JSON.stringify(motionOf(byId('en1')))}`);
+        check('and the drag then works', events[0] === 'tiledragstart:en2:null', events.join(' '));
+        pointer('pointerup', c2.x + 2 * STEP, c2.y);
+        await frames(2);
+        await wait(700);
+        check('the drop after it lands the tiles', rest(en) && JSON.stringify(cellsOf(en)) === JSON.stringify(expectedCells(en)), JSON.stringify(cellsOf(en)));
+
+        // 13h. Reduced motion: the end state on the next frame. Without it, the time is taken.
+        await en.exit({ variant: 'desktop' });
+        const t1 = performance.now();
+        await en.exit({ variant: 'mobile' });
+        const exitTook = performance.now() - t1;
+        const t2 = performance.now();
+        await en.enter({ variant: 'desktop' });
+        const enterTook = performance.now() - t2;
+        if (reduced) check('reduced motion: exit() and enter() reach their end state on the next frame', exitTook < 100 && enterTook < 100 && rest(en), `${Math.round(exitTook)} ${Math.round(enterTook)}`);
+        else check('motion: exit() and enter() take their time', exitTook >= 500 && enterTook >= 1000, `${Math.round(exitTook)} ${Math.round(enterTook)}`);
+    }
+
+    // 13i. The variant is the one the page sets when it is used: a class changes it, and the next
+    // entrance (explicit, or the one after a launch) plays that one.
+    {
+        const ev = byId('ev') as AxTileGroup;
+        const evTiles = ['ev1', 'ev2'];
+        await ev.enter();
+        check('--tile-entrance desktop: the explicit default is desktop', evTiles.every((id) => !motionOf(byId(id))?.rotateY), evTiles.map((id) => JSON.stringify(motionOf(byId(id)))).join(' '));
+        ev.classList.add('mobile-in');
+        await frames(3);
+        await ev.exit();
+        check('a class sets --tile-entrance mobile: the explicit default exit is mobile', evTiles.every((id) => { const m = motionOf(byId(id)); return !!m && m.rotateY === 90 && m.opacity === 0; }), evTiles.map((id) => JSON.stringify(motionOf(byId(id)))).join(' '));
+        const turningIn = ev.enter();
+        if (!reduced) {
+            await wait(300);
+            const m = motionOf(byId('ev1'));
+            check('a class sets --tile-entrance mobile: the explicit default enter turns', !!m && m.rotateY! > 0 && m.rotateY! < 90, JSON.stringify(m));
+        }
+        await turningIn;
+        check('the mobile enter ends at rest', rest(ev), '');
+        // The launch restores the tiles and plays the entrance of the variant at that moment.
+        ev.dispatchEvent(new CustomEvent('tilelaunchend', { bubbles: true, composed: true, detail: {} }));
+        if (!reduced) check('tilelaunchend plays the mobile variant the page sets then', evTiles.every((id) => { const m = motionOf(byId(id)); return !!m && m.rotateY === 90 && m.opacity === 0; }), evTiles.map((id) => JSON.stringify(motionOf(byId(id)))).join(' '));
+        await wait(800);
+        check('and it ends at rest', rest(ev), '');
+        ev.classList.remove('mobile-in');
+        await frames(3);
+    }
+
+    // 13j. A change of the layout during an entrance ends it where it is at once, resolves it, and
+    // the new layout is then applied.
+    {
+        const en = byId('en') as AxTileGroup;
+        const enTiles = ['en1', 'en2', 'en3', 'en4'];
+        await en.exit({ variant: 'desktop' });
+        let ended = false;
+        const running = en.enter({ variant: 'desktop' }).then(() => (ended = true));
+        await wait(200);
+        en.style.setProperty('--tile-cell-width', '60px');
+        await wait(150);
+        check('a layout change ends a running entrance at once, and resolves it', ended && rest(en), `${ended} ${enTiles.map((id) => opacityOf(byId(id))).join(' ')}`);
+        await running;
+        await wait(700);
+        // With 60 px cells the columns are 64 px apart: en2 is in the third column, at 128 px.
+        const x = /translate\((-?[\d.]+)px/.exec(byId('en2').style.transform);
+        check('after the change the tiles are laid out for the new sizes', !!x && Math.abs(+x[1] - 128) < 0.5 && rest(en), byId('en2').style.transform);
+        en.style.removeProperty('--tile-cell-width');
+        await wait(700);
+        check('and back to the layout of the page', rest(en) && JSON.stringify(cellsOf(en)) === JSON.stringify(expectedCells(en)), JSON.stringify(cellsOf(en)));
+
+        // A change of --tile-entrance ends a running entrance at once, too.
+        let ended2 = false;
+        const running2 = en.enter({ variant: 'desktop' }).then(() => (ended2 = true));
+        await wait(200);
+        en.classList.add('to-mobile');
+        await frames(3);
+        check('a change of --tile-entrance ends a running entrance at once', ended2 && rest(en), `${ended2} ${enTiles.map((id) => opacityOf(byId(id))).join(' ')}`);
+        await running2;
+        en.classList.remove('to-mobile');
+        await frames(3);
+        // A class that leaves the variant alone leaves a running entrance alone: the variant here is
+        // mobile, so a re-read that wrongly took the old variant would end the run.
+        en.classList.add('to-mobile');
+        await frames(3);
+        if (!reduced) {
+            let ended3 = false;
+            const running3 = en.enter({ variant: 'mobile' }).then(() => (ended3 = true));
+            await wait(200);
+            en.classList.add('unrelated');
+            await frames(3);
+            check('a class that leaves the variant alone does not end a running entrance', !ended3 && !rest(en), `${ended3} ${enTiles.map((id) => opacityOf(byId(id))).join(' ')}`);
+            await running3;
+            en.classList.remove('unrelated');
+        }
+        en.classList.remove('to-mobile');
+        await frames(3);
+        await wait(300);
+        check('and the group is at rest after both', rest(en), '');
     }
 
     return { userAgent: navigator.userAgent, checks };
