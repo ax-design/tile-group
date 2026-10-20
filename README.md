@@ -89,6 +89,7 @@ Reserved for dragging tiles onto each other to form groups. It fires no events y
 All events are fired on the tile and bubble.
 
 * `tiledragstart`: a drag starts. Cancel it to keep the tile in place.
+* `tilelift`: the tile lifts, by a drag or a hold that has not dragged yet. Surfaces inside it, such as a reveal light, should release their press.
 * `tilereorder`: a tile moved to a new place, `detail` is `{ from, to, reason }`. Cancel it to keep the tile in place. `reason` is `pointer` (a drop), `keyboard` (Alt+Shift+Arrow) or `api` (`moveTile()`).
 * `tiledragend`: the drag is over, `detail` is `{ from, to }` (equal when nothing moved).
 * `tilecontextmenu`: `detail` is `{ clientX, clientY, pointerType }`; `pointerType` is `mouse`, `touch`, `pen` or `keyboard`.
@@ -251,6 +252,7 @@ The background of the Start screen is the page's own, behind the groups. As in W
 * 0.2.0: `<ax-tile>` moved to `@ax-design/tile`. tile-group no longer defines `<ax-tile>` and exports no `AxTile`: register `@ax-design/tile` for it. `register()` now defines only `<ax-tile-group>`, not `<ax-surface>`; register `@ax-design/surface` yourself if your page needs it. The group observes the `columns` and `rows` of its children itself, so any child can change its size. `tileChanged()` is deprecated; it still lays the group out.
 * 0.2.1: An entrance that `enter()` starts right after the page sets `--tile-entrance` keeps running. The group used to take the new value for a switch of the variant and end the entrance on the next frame, so the tiles appeared at once.
 * 0.2.2: A change of the layout during an entrance (a new order, new sizes) no longer ends it: the tiles take their new places at once and the entrance runs on. A group moves no tile while an entrance waits or runs, or while it is hidden, so an order restored before the group shows lands without moves.
+* 0.2.3: `tilelift`, fired when a tile lifts, by a drag or a hold that has not dragged yet: a surface inside the tile should release its press then. A lift of a touch or a pen no longer ends with a click on the tile.
 
 ## Development
 

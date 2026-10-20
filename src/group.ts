@@ -1151,6 +1151,10 @@ export class AxTileGroup extends HTMLElement {
         this.jumpEntrance();
         const release = (g.tile as HTMLElement & { release?: () => void }).release;
         if (typeof release === 'function') release.call(g.tile);
+        // The surfaces inside the tile (for example a reveal light over a picture) are pressed by
+        // their own pointer events, not by the tile; they must let go when the tile lifts. A page
+        // that puts surfaces in a plain tile listens and calls their release().
+        g.tile.dispatchEvent(new CustomEvent('tilelift', { bubbles: true, composed: true }));
         const shown = this.shown.get(g.tile);
         if (shown) this.place(g.tile, shown.x, shown.y, DRAG_SCALE, true, 0, LIFT_MS);
         g.tile.style.zIndex = '1';
@@ -1313,6 +1317,9 @@ export class AxTileGroup extends HTMLElement {
         this.gesture = null;
         this.removeListeners(g);
         if (g.lifted) {
+            // A lift of a touch or a pen ends with a click on the tile; it is not a click. Drags
+            // are handled by drop(); a lift that never dragged needs the same guard.
+            suppressNextClick();
             // Lifted but not dragged: back to normal.
             for (const tile of this.tiles) {
                 const s = this.shown.get(tile);
