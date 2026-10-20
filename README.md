@@ -172,7 +172,7 @@ ax-tile-group { --tile-entrance: desktop; }
 
 With a variant set, the group plays it once, the first time it is visible (with an IntersectionObserver), and again after a launch is restored (see [Launch](#launch)). Each automatic play uses the variant the property says at that moment.
 
-`enter({ variant })` plays the entrance by hand and resolves when the last tile has arrived; `exit({ variant })` plays the matching exit and resolves when the last tile has gone. `variant` overrides the property; without it they use the property, and `desktop` when it is `none`. The tiles stay invisible after an exit until the next `enter()` or a re-layout. A drag or a keyboard move during an entrance or an exit first jumps it to its end state.
+`enter({ variant })` plays the entrance by hand and resolves when the last tile has arrived; `exit({ variant })` plays the matching exit and resolves when the last tile has gone. `variant` overrides the property; without it they use the property, and `desktop` when it is `none`. The tiles stay invisible after an exit until the next `enter()` or a re-layout. A drag or a keyboard move during an entrance or an exit first jumps it to its end state. A change of the layout during an entrance (a new order, new sizes) leaves it running, and the tiles take their new places at once; during an exit it ends the exit.
 
 A change in the middle of an entrance or an exit ends it at once, at its end state, and resolves its promise: a change of the places, the sizes or the children of the group (a resize that moves tiles included), or a change of the variant the property gives. The new layout or variant then applies as usual; a running animation is never switched from one variant to the other.
 
@@ -201,6 +201,8 @@ A change in the middle of an entrance or an exit ends it at once, at its end sta
 Times are `ms` or `s`, lengths are `px`, and invalid values fall back to the defaults. The parameters are read when an animation starts.
 
 **Reduced motion**: with `prefers-reduced-motion: reduce`, `enter()` and `exit()` jump to their end state at once, and their promises resolve on the next frame.
+
+**Unseen moves**: while an entrance waits or runs, and while the group is hidden (`visibility: hidden`, or no box), a new layout puts the tiles in their places at once, with no move. A page can restore a stored order of the tiles while the group is hidden, and show it with its entrance after.
 
 **Focus**: focus inside a group during its entrance, or before it has played, ends the entrance at once, so a keyboard user sees the tile that has the focus. An exit runs on.
 

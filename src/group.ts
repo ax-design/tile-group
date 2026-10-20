@@ -519,9 +519,15 @@ export class AxTileGroup extends HTMLElement {
     // Tiles that move go one after another (the reposition of WinJS), unless `together` is set:
     // settling after a drop starts everywhere at once, so the dropped tile never waits.
     private applyLayout(order: HTMLElement[], result: LayoutResult, options: { animate: boolean; scale: number; skip?: HTMLElement; duration?: number; together?: boolean }) {
-        // A change of the places, of the sizes or of the children ends a run where it is; the new
-        // layout is then applied as usual.
-        if (this.run && this.layoutChanges(order, result)) this.finishRun();
+        // An entrance reads the places at every frame, so it goes on over a new layout, and the
+        // tiles take their new places at once: a move under an entrance would draw them sliding
+        // while they come in. Any other run (an exit) ends where it is, and the new layout is then
+        // applied as usual.
+        if (this.run && this.run.kind !== 'enter' && this.layoutChanges(order, result)) this.finishRun();
+        // Nobody sees the moves of tiles that are not shown yet: an entrance waiting or running, or
+        // a group the page hides. They take their places at once (an order restored before the page
+        // shows the group, for one).
+        if (options.animate && !this.movesSeen()) options = { ...options, animate: false };
         // A re-layout brings the tiles of an exit back.
         if (this.hold && this.hold.kind === 'exit') {
             this.hold = null;
@@ -559,6 +565,15 @@ export class AxTileGroup extends HTMLElement {
             if (this.place(tile, p.column * stepX, p.row * stepY, options.scale, options.animate, options.together ? 0 : moved, options.duration || REPOSITION_MS)) moved++;
         });
         for (const tile of Array.from(this.shown.keys())) if (tile.parentElement !== this) this.shown.delete(tile);
+    }
+
+    // Whether moves of the tiles would be seen: not while an entrance waits or runs, nor while the
+    // group is hidden (visibility: hidden, or no box at all).
+    private movesSeen(): boolean {
+        if (this.hold && this.hold.kind === 'enter') return false;
+        if (this.run && this.run.kind === 'enter') return false;
+        if (!this.getClientRects().length) return false;
+        return getComputedStyle(this).visibility !== 'hidden';
     }
 
     // Moves a tile to (x, y) at a scale. Returns true when it animates, for the stagger.

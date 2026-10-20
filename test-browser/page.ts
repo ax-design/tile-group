@@ -890,8 +890,18 @@ async function run() {
         await frames(3);
     }
 
-    // 13j. A change of the layout during an entrance ends it where it is at once, resolves it, and
-    // the new layout is then applied.
+    // The tiles of a group drawn away from their places by the layout: a move in progress.
+    const movingIn = (group: Element, tiles: Element[]) => {
+        const g = group as unknown as { shown: Map<Element, { x: number; y: number }>; painted: WeakMap<Element, { x: number; y: number }> };
+        return tiles.filter((t) => {
+            const at = g.shown.get(t);
+            const drawn = g.painted.get(t);
+            return !!at && !!drawn && (Math.abs(at.x - drawn.x) > 0.01 || Math.abs(at.y - drawn.y) > 0.01);
+        });
+    };
+
+    // 13j. A change of the layout during an entrance leaves it running: the entrance reads the
+    // places at every frame, and the tiles take their new places at once, with no move under it.
     {
         const en = byId('en') as AxTileGroup;
         const enTiles = ['en1', 'en2', 'en3', 'en4'];
@@ -900,16 +910,30 @@ async function run() {
         const running = en.enter({ variant: 'desktop' }).then(() => (ended = true));
         await wait(200);
         en.style.setProperty('--tile-cell-width', '60px');
-        await wait(150);
-        check('a layout change ends a running entrance at once, and resolves it', ended && rest(en), `${ended} ${enTiles.map((id) => opacityOf(byId(id))).join(' ')}`);
+        await frames(3);
+        const moving = movingIn(en, enTiles.map(byId));
+        check('a layout change during an entrance moves no tile', moving.length === 0, moving.map((t) => t.id).join(' '));
+        check('and leaves the entrance running', reduced ? ended : !ended, `${ended} ${enTiles.map((id) => opacityOf(byId(id))).join(' ')}`);
         await running;
-        await wait(700);
         // With 60 px cells the columns are 64 px apart: en2 is in the third column, at 128 px.
         const x = /translate\((-?[\d.]+)px/.exec(byId('en2').style.transform);
-        check('after the change the tiles are laid out for the new sizes', !!x && Math.abs(+x[1] - 128) < 0.5 && rest(en), byId('en2').style.transform);
+        check('after the entrance the tiles are laid out for the new sizes', !!x && Math.abs(+x[1] - 128) < 0.5 && rest(en), byId('en2').style.transform);
         en.style.removeProperty('--tile-cell-width');
         await wait(700);
         check('and back to the layout of the page', rest(en) && JSON.stringify(cellsOf(en)) === JSON.stringify(expectedCells(en)), JSON.stringify(cellsOf(en)));
+
+        // A group the page hides takes a new order at once, with no move: nobody would see it.
+        const hidden = byId('g') as AxTileGroup;
+        hidden.style.visibility = 'hidden';
+        const firstTile = hidden.firstElementChild!;
+        hidden.appendChild(firstTile);
+        await frames(2);
+        const hiddenMoving = movingIn(hidden, Array.from(hidden.children));
+        check('a hidden group takes a new order without moves', hiddenMoving.length === 0 && JSON.stringify(cellsOf(hidden)) === JSON.stringify(expectedCells(hidden)), String(hiddenMoving.length));
+        hidden.insertBefore(firstTile, hidden.firstElementChild);
+        await frames(2);
+        hidden.style.visibility = '';
+        await wait(700);
 
         // A change of --tile-entrance ends a running entrance at once, too.
         let ended2 = false;
