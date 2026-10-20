@@ -1,6 +1,6 @@
 {
     "name": "@ax-design/tile-group",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "description": "Web component that implements the tile groups of Axiom Design System, after the Windows 8 Start screen.",
     "main": "build/main.js",
     "module": "es/index.js",
