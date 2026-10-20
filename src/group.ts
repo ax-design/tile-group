@@ -635,6 +635,10 @@ export class AxTileGroup extends HTMLElement {
         }
         // The one in progress ends where it is, and its promise resolves.
         this.finishRun();
+        // The variant the page sets now is the one this run plays: a page that sets
+        // --tile-entrance and calls enter() at once must not see the run ended by the style check
+        // of the next frame, as a change of variant would end it.
+        this.seenVariant = this.entranceVariant();
         const params = readParams(getComputedStyle(this));
         // In a boundary, a desktop entrance joins the wave of the entrances that start with it; any
         // other run leaves it.

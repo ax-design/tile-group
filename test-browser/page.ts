@@ -823,6 +823,19 @@ async function run() {
         await wait(700);
         check('the drop after it lands the tiles', rest(en) && JSON.stringify(cellsOf(en)) === JSON.stringify(expectedCells(en)), JSON.stringify(cellsOf(en)));
 
+        // 13g''. A page that sets --tile-entrance and calls enter() at once keeps its entrance:
+        // the style check of the next frame does not take the new variant for a switch.
+        await en.exit({ variant: 'desktop' });
+        const before = getComputedStyle(en).getPropertyValue('--tile-entrance').trim();
+        en.style.setProperty('--tile-entrance', before === 'mobile' ? 'desktop' : 'mobile');
+        let arrivedAfterSet = false;
+        const setAndEnter = en.enter().then(() => (arrivedAfterSet = true));
+        await frames(6);
+        check('enter() right after a new --tile-entrance keeps running', reduced ? arrivedAfterSet : !arrivedAfterSet, String(arrivedAfterSet));
+        await setAndEnter;
+        en.style.removeProperty('--tile-entrance');
+        await frames(3);
+
         // 13g'. Focus inside the group during the entrance shows the tiles at once.
         await en.exit({ variant: 'desktop' });
         let arrivedAtFocus = false;
