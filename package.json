@@ -1,6 +1,6 @@
 {
     "name": "@ax-design/tile-group",
-    "version": "0.1.5",
+    "version": "0.2.0",
     "description": "Web component that implements the tile groups of Axiom Design System, after the Windows 8 Start screen.",
     "main": "build/main.js",
     "module": "es/index.js",
@@ -12,7 +12,7 @@
     "license": "MIT",
     "sideEffects": false,
     "devDependencies": {
-        "@ax-design/reveal-highlight": "^0.6.2",
+        "@ax-design/reveal-highlight": "^0.7.0",
         "@fluentui/svg-icons": "1.1.343",
         "@types/bun": "latest",
         "playwright": "^1.64.0",
@@ -29,8 +29,8 @@
         "demo": "bun demo/serve.ts"
     },
     "dependencies": {
-        "@ax-design/shape": "^0.2.0",
-        "@ax-design/surface": "^0.2.4",
+        "@ax-design/shape": "^0.3.0",
+        "@ax-design/surface": "^0.3.0",
         "@ax-design/typed-om": "^0.1.0"
     },
     "homepage": "https://github.com/ax-design/tile-group#readme",
