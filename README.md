@@ -247,6 +247,7 @@ The background of the Start screen is the page's own, behind the groups. As in W
 * 0.2.0: `--tile-entrance` (desktop, mobile or none), `enter()`, `exit()`, and the launch of a tile (`tilelaunchstart` and `tilelaunchend`), see [Entrance and exit](#entrance-and-exit) and [Launch](#launch). A surface child now gets its drag opacity through `motion()`, not on its host.
 * 0.2.0: `<ax-tile-bound>` (`AxTileBoundary`), which runs the desktop entrances of the groups in it as one, see [Start screen](#start-screen); `register()` defines it too. The turnstile now turns every tile about one vertical axis at the left edge of the viewport, with one vanishing point at the middle of its height, and `--tile-turnstile-origin` moves that axis; it turned about the left edge of each group before, with a vanishing point per tile.
 * 0.2.0: `<ax-tile>` moved to `@ax-design/tile`. tile-group no longer defines `<ax-tile>` and exports no `AxTile`: register `@ax-design/tile` for it. `register()` now defines only `<ax-tile-group>`, not `<ax-surface>`; register `@ax-design/surface` yourself if your page needs it. The group observes the `columns` and `rows` of its children itself, so any child can change its size. `tileChanged()` is deprecated; it still lays the group out.
+* 0.2.1: An entrance that `enter()` starts right after the page sets `--tile-entrance` keeps running. The group used to take the new value for a switch of the variant and end the entrance on the next frame, so the tiles appeared at once.
 
 ## Development
 
