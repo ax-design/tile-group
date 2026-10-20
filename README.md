@@ -202,6 +202,8 @@ Times are `ms` or `s`, lengths are `px`, and invalid values fall back to the def
 
 **Reduced motion**: with `prefers-reduced-motion: reduce`, `enter()` and `exit()` jump to their end state at once, and their promises resolve on the next frame.
 
+**Focus**: focus inside a group during its entrance, or before it has played, ends the entrance at once, so a keyboard user sees the tile that has the focus. An exit runs on.
+
 **For authors of children**: the group moves each child's transform, and sets its `z-index`. A child that is a surface (it has a `motion()` method, like `<ax-surface>`) gets its 3D turn and its opacity through `motion()`, never through a CSS 3D transform or `opacity` on its host: in Firefox no 3D transform may sit above acrylic, and an opacity on an ancestor makes it the backdrop root in every engine. Any other element gets them on its host, the turn in 3D with its `transform-origin` on the axis of the turnstile. Set your own 3D or opacity on a surface's `motion()` only when the group does not run an entrance or a launch at that moment.
 
 ## Launch

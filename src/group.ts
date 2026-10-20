@@ -277,6 +277,7 @@ export class AxTileGroup extends HTMLElement {
         // Not passive: a held or dragged touch must not scroll the page.
         this.addEventListener('touchmove', this.onTouchMove, { passive: false } as AddEventListenerOptions);
         this.addEventListener('keydown', this.onKeyMove);
+        this.addEventListener('focusin', this.onFocusIn);
         // On the document: a launch anywhere on the page takes the whole screen, not only the group
         // of the tile.
         document.addEventListener('tilelaunchstart', this.onLaunchStart);
@@ -342,6 +343,7 @@ export class AxTileGroup extends HTMLElement {
         this.removeEventListener('contextmenu', this.onContextMenu);
         this.removeEventListener('touchmove', this.onTouchMove);
         this.removeEventListener('keydown', this.onKeyMove);
+        this.removeEventListener('focusin', this.onFocusIn);
         document.removeEventListener('tilelaunchstart', this.onLaunchStart);
         document.removeEventListener('tilelaunchend', this.onLaunchEnd);
         if (this.mutationObserver) this.mutationObserver.disconnect();
@@ -754,6 +756,13 @@ export class AxTileGroup extends HTMLElement {
             this.showHold();
         }
     }
+
+    // Focus inside the group shows its tiles at once: a keyboard user must see what has the focus,
+    // not wait for an entrance to bring it in. An exit is left to run, its tiles are going away.
+    private onFocusIn = () => {
+        if (this.run && this.run.kind === 'enter') this.finishRun();
+        if (this.hold && this.hold.kind === 'enter') this.jumpEntrance();
+    };
 
     // Draws the state of the hold (or none) on every tile.
     private showHold() {

@@ -823,6 +823,20 @@ async function run() {
         await wait(700);
         check('the drop after it lands the tiles', rest(en) && JSON.stringify(cellsOf(en)) === JSON.stringify(expectedCells(en)), JSON.stringify(cellsOf(en)));
 
+        // 13g'. Focus inside the group during the entrance shows the tiles at once.
+        await en.exit({ variant: 'desktop' });
+        let arrivedAtFocus = false;
+        en.enter({ variant: 'desktop' }).then(() => (arrivedAtFocus = true));
+        await wait(50);
+        const focusable = byId('en3').querySelector('a, button, [tabindex]') as HTMLElement | null;
+        const target = focusable || byId('en3');
+        if (!focusable) target.tabIndex = -1;
+        target.focus();
+        await frames(2);
+        check('focus during the entrance jumps it to its end', arrivedAtFocus && enTiles.every((id) => opacityOf(byId(id)) === 1), enTiles.map((id) => opacityOf(byId(id))).join(' '));
+        target.blur();
+        if (!focusable) target.removeAttribute('tabindex');
+
         // 13h. Reduced motion: the end state on the next frame. Without it, the time is taken.
         await en.exit({ variant: 'desktop' });
         const t1 = performance.now();
