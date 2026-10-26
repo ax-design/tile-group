@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 0.2.4
+
+- Depends on @ax-design/surface 0.4 and typed-om 0.3 (no duplicate copies next to packages that use them).
+
 ## 0.2.3
 
 - `tilelift`, fired when a tile lifts, by a drag or a hold that has not dragged yet: a surface inside the tile should release its press then. A lift of a touch or a pen no longer ends with a click on the tile.
