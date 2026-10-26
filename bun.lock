@@ -11,7 +11,7 @@
       },
       "devDependencies": {
         "@ax-design/reveal-highlight": "^0.7.1",
-        "@fluentui/svg-icons": "1.1.343",
+        "@fluentui/svg-icons": "1.1.344",
         "@types/bun": "latest",
         "playwright": "^1.64.0",
         "typescript": "^5.6.0",
@@ -28,7 +28,7 @@
 
     "@ax-design/typed-om": ["@ax-design/typed-om@0.3.0", "", {}, "sha512-zNLME1sVQ/v7fqiIPDoz/2/d2cdkHi1bQhR2opOxZSaIkTSVjet8k9gpUCuNeZhazElWGkqO1yAaf9kH+TIddg=="],
 
-    "@fluentui/svg-icons": ["@fluentui/svg-icons@1.1.343", "", {}, "sha512-+rlKFnM2MkAg2G0qMD3BM/K3jC+Jc+VAKgxE7x9cpCPDDNpwKaOSD0DntUkVXrZGOjBvfmID0DoRslsXbC8X5Q=="],
+    "@fluentui/svg-icons": ["@fluentui/svg-icons@1.1.344", "", {}, "sha512-rasjaq4hBXzRS25pSY9gaqwY7NdvZJCz7G/rtpwF6mCmg2R+9TnySLhHbR+sOpkMP/IDDG28XvxRcNEQ/lJYoQ=="],
 
     "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 
